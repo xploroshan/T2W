@@ -1,5 +1,7 @@
 import { MetadataRoute } from "next";
-import { mockRides, mockBlogs } from "@/data/mock";
+import { mockRides } from "@/data/mock";
+
+export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://talesontwowheels.com";
