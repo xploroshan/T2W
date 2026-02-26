@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bike,
   Mail,
@@ -12,12 +13,19 @@ import {
   User,
   Phone,
   MapPin,
-  CheckCircle,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export function RegisterPage() {
+  const { register } = useAuth();
+  const router = useRouter();
+
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -29,48 +37,35 @@ export function RegisterPage() {
     motorcycle: "",
     agreeTerms: false,
   });
-  const [registered, setRegistered] = useState(false);
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (step === 1) {
       setStep(2);
-    } else {
-      setRegistered(true);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { name, email, phone, password, city, ridingExperience, motorcycle } = formData;
+      await register({ name, email, phone, password, city, ridingExperience, motorcycle });
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Registration failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
-
-  if (registered) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-4 pt-20">
-        <div className="absolute inset-0 bg-hero-pattern" />
-        <div className="relative w-full max-w-md text-center">
-          <div className="card">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-400/10">
-              <CheckCircle className="h-10 w-10 text-green-400" />
-            </div>
-            <h1 className="font-display text-2xl font-bold text-white">
-              Registration Submitted!
-            </h1>
-            <p className="mt-3 text-t2w-muted">
-              Your registration is pending approval. A T2W admin will review and
-              approve your account. You&apos;ll receive an email once approved.
-            </p>
-            <p className="mt-4 text-sm text-t2w-muted">
-              Approval usually takes 24-48 hours.
-            </p>
-            <Link href="/" className="btn-primary mt-6 inline-block">
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-24">
@@ -124,6 +119,14 @@ export function RegisterPage() {
         </div>
 
         <div className="card">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          )}
+
           {/* Social Registration */}
           {step === 1 && (
             <>
@@ -353,16 +356,27 @@ export function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
+                    disabled={loading}
                     className="btn-secondary flex-1"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
+                    disabled={loading}
                     className="btn-primary flex flex-1 items-center justify-center gap-2"
                   >
-                    Register
-                    <ArrowRight className="h-4 w-4" />
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Registering...
+                      </>
+                    ) : (
+                      <>
+                        Register
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
                 </div>
               </>

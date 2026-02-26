@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   Heart,
@@ -14,8 +14,24 @@ import {
   Tag,
   BookOpen,
   Play,
+  Loader2,
 } from "lucide-react";
-import { mockBlogs } from "@/data/mock";
+import { api } from "@/lib/api-client";
+
+type BlogPost = {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  authorName: string;
+  publishDate: string;
+  tags: string[];
+  type: string;
+  isVlog: boolean;
+  videoUrl?: string | null;
+  readTime: number;
+  likes: number;
+};
 
 type FilterType = "all" | "official" | "personal";
 
@@ -25,25 +41,37 @@ export function BlogsPage() {
     "all"
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [blogs, setBlogs] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockBlogs.filter((blog) => {
-    if (activeType !== "all" && blog.type !== activeType) return false;
-    if (contentFilter === "blog" && blog.isVlog) return false;
-    if (contentFilter === "vlog" && !blog.isVlog) return false;
-    if (
-      searchQuery &&
-      !blog.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !blog.author.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !blog.tags.some((t) =>
-        t.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    )
-      return false;
-    return true;
-  });
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeType !== "all") params.set("type", activeType);
+    if (contentFilter === "vlog") params.set("isVlog", "true");
+    if (contentFilter === "blog") params.set("isVlog", "false");
+    if (searchQuery) params.set("search", searchQuery);
 
+    api.blogs
+      .list(params.toString())
+      .then((data: unknown) => {
+        const d = data as { blogs: BlogPost[] };
+        setBlogs(d.blogs);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [activeType, contentFilter, searchQuery]);
+
+  const filtered = blogs;
   const featuredBlog = filtered[0];
   const otherBlogs = filtered.slice(1);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center pt-24">
+        <Loader2 className="h-8 w-8 animate-spin text-t2w-accent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-16">
@@ -166,14 +194,14 @@ export function BlogsPage() {
                 <div className="mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                      {featuredBlog.author
+                      {featuredBlog.authorName
                         .split(" ")
                         .map((n) => n[0])
                         .join("")}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-white">
-                        {featuredBlog.author}
+                        {featuredBlog.authorName}
                       </p>
                       <p className="text-xs text-t2w-muted">
                         {new Date(featuredBlog.publishDate).toLocaleDateString(
@@ -246,7 +274,7 @@ export function BlogsPage() {
               <div className="mt-4 flex items-center justify-between border-t border-t2w-border pt-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-t2w-muted">
-                    {blog.author}
+                    {blog.authorName}
                   </span>
                   <span className="text-xs text-t2w-muted">&middot;</span>
                   <span className="flex items-center gap-1 text-xs text-t2w-muted">

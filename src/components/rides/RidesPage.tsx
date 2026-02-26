@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -14,7 +14,7 @@ import {
   ChevronDown,
   Bike,
 } from "lucide-react";
-import { mockRides } from "@/data/mock";
+import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
 
 type FilterTab = "all" | "upcoming" | "completed";
@@ -41,12 +41,28 @@ const statusColors = {
 };
 
 export function RidesPage() {
+  const [rides, setRides] = useState<Ride[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  const filtered = mockRides.filter((ride) => {
+  useEffect(() => {
+    api.rides
+      .list()
+      .then((data: any) => {
+        setRides(data.rides);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch rides:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const filtered = rides.filter((ride) => {
     if (activeTab === "upcoming" && ride.status !== "upcoming") return false;
     if (activeTab === "completed" && ride.status !== "completed") return false;
     if (typeFilter !== "all" && ride.type !== typeFilter) return false;
@@ -60,9 +76,24 @@ export function RidesPage() {
     return true;
   });
 
-  const totalKm = mockRides
+  const totalKm = rides
     .filter((r) => r.status === "completed")
     .reduce((acc, r) => acc + r.distanceKm, 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-24 pb-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <Bike className="mx-auto h-16 w-16 animate-pulse text-t2w-accent" />
+              <p className="mt-4 text-t2w-muted">Loading rides...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-16">
@@ -80,14 +111,14 @@ export function RidesPage() {
           {/* Stats bar */}
           <div className="mt-8 flex flex-wrap gap-6">
             {[
-              { label: "Total Rides", value: mockRides.length },
+              { label: "Total Rides", value: rides.length },
               {
                 label: "Upcoming",
-                value: mockRides.filter((r) => r.status === "upcoming").length,
+                value: rides.filter((r) => r.status === "upcoming").length,
               },
               {
                 label: "Completed",
-                value: mockRides.filter((r) => r.status === "completed").length,
+                value: rides.filter((r) => r.status === "completed").length,
               },
               {
                 label: "Total KMs",

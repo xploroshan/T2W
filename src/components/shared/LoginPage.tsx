@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bike,
   Mail,
@@ -9,20 +10,36 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Chrome,
-  Facebook,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 2000);
+    setError(null);
+
+    try {
+      await login(email, password);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Login failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -53,7 +70,10 @@ export function LoginPage() {
         <div className="card">
           {/* Social Login */}
           <div className="space-y-3">
-            <button className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50 hover:bg-t2w-surface">
+            <button
+              disabled
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50 hover:bg-t2w-surface disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
@@ -74,7 +94,10 @@ export function LoginPage() {
               </svg>
               Continue with Google
             </button>
-            <button className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50 hover:bg-t2w-surface">
+            <button
+              disabled
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50 hover:bg-t2w-surface disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#1877F2">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
               </svg>
@@ -88,6 +111,13 @@ export function LoginPage() {
             <span className="text-xs text-t2w-muted">or continue with email</span>
             <div className="h-px flex-1 bg-t2w-border" />
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
 
           {/* Email Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">

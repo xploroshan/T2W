@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -9,8 +10,9 @@ import {
   Clock,
   Gauge,
   Route,
+  Bike,
 } from "lucide-react";
-import { mockRides } from "@/data/mock";
+import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
 
 function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
@@ -145,10 +147,42 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
 }
 
 export function UpcomingRides() {
-  const upcoming = mockRides.filter((r) => r.status === "upcoming");
-  const recent = mockRides
+  const [rides, setRides] = useState<Ride[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.rides
+      .list()
+      .then((data: any) => {
+        setRides(data.rides);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch rides:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const upcoming = rides.filter((r) => r.status === "upcoming");
+  const recent = rides
     .filter((r) => r.status === "completed")
     .slice(0, 5);
+
+  if (loading) {
+    return (
+      <section className="relative py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <Bike className="mx-auto h-16 w-16 animate-pulse text-t2w-accent" />
+              <p className="mt-4 text-t2w-muted">Loading rides...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="relative py-24">
