@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell,
   Info,
@@ -10,8 +10,16 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-import { mockNotifications } from "@/data/mock";
-import { Notification } from "@/types";
+import { api } from "@/lib/api-client";
+
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type: "info" | "warning" | "success" | "ride";
+  date: string;
+  isRead: boolean;
+};
 
 const typeConfig = {
   info: {
@@ -41,8 +49,24 @@ const typeConfig = {
 };
 
 export function NotificationBoard() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.notifications
+      .list()
+      .then((data) => {
+        const { notifications } = data as { notifications: Notification[] };
+        setNotifications(notifications);
+      })
+      .catch(() => {
+        setNotifications([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
 
   const filtered =
     filter === "all"
@@ -53,6 +77,12 @@ export function NotificationBoard() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    api.notifications.markRead(id).catch(() => {
+      // Revert optimistic update on failure
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: false } : n))
+      );
+    });
   };
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -99,50 +129,60 @@ export function NotificationBoard() {
 
             {/* Notification List */}
             <div className="space-y-3">
-              {filtered.map((notif) => {
-                const config = typeConfig[notif.type];
-                const Icon = config.icon;
-                return (
-                  <div
-                    key={notif.id}
-                    className={`group relative flex gap-4 rounded-xl border p-4 transition-all ${
-                      notif.isRead
-                        ? "border-t2w-border bg-t2w-surface/50"
-                        : `${config.border} ${config.bg}`
-                    }`}
-                    onClick={() => markAsRead(notif.id)}
-                  >
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-t2w-accent border-t-transparent" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <p className="py-8 text-center text-sm text-t2w-muted">
+                  No notifications found.
+                </p>
+              ) : (
+                filtered.map((notif) => {
+                  const config = typeConfig[notif.type];
+                  const Icon = config.icon;
+                  return (
                     <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${config.bg}`}
+                      key={notif.id}
+                      className={`group relative flex gap-4 rounded-xl border p-4 transition-all ${
+                        notif.isRead
+                          ? "border-t2w-border bg-t2w-surface/50"
+                          : `${config.border} ${config.bg}`
+                      }`}
+                      onClick={() => markAsRead(notif.id)}
                     >
-                      <Icon className={`h-4 w-4 ${config.color}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4
-                          className={`text-sm font-semibold ${
-                            notif.isRead ? "text-gray-300" : "text-white"
-                          }`}
-                        >
-                          {notif.title}
-                        </h4>
-                        {!notif.isRead && (
-                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-t2w-accent" />
-                        )}
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${config.bg}`}
+                      >
+                        <Icon className={`h-4 w-4 ${config.color}`} />
                       </div>
-                      <p className="mt-1 text-sm text-t2w-muted">
-                        {notif.message}
-                      </p>
-                      <span className="mt-2 inline-block text-xs text-t2w-muted">
-                        {new Date(notif.date).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4
+                            className={`text-sm font-semibold ${
+                              notif.isRead ? "text-gray-300" : "text-white"
+                            }`}
+                          >
+                            {notif.title}
+                          </h4>
+                          {!notif.isRead && (
+                            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-t2w-accent" />
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-t2w-muted">
+                          {notif.message}
+                        </p>
+                        <span className="mt-2 inline-block text-xs text-t2w-muted">
+                          {new Date(notif.date).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 

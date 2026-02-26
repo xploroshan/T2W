@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Shield,
   Users,
@@ -11,10 +11,18 @@ import {
   Hand,
   Fuel,
   BookOpen,
-  CheckCircle,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
-import { mockGuidelines } from "@/data/mock";
+import { api } from "@/lib/api-client";
+
+type Guideline = {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  icon: string;
+};
 
 const categoryConfig = {
   group: {
@@ -57,11 +65,32 @@ const iconMap: Record<string, React.ElementType> = {
 export function GuidelinesPage() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [guidelines, setGuidelines] = useState<Guideline[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.guidelines
+      .list()
+      .then((data: unknown) => {
+        const d = data as { guidelines: Guideline[] };
+        setGuidelines(d.guidelines);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered =
     activeCategory === "all"
-      ? mockGuidelines
-      : mockGuidelines.filter((g) => g.category === activeCategory);
+      ? guidelines
+      : guidelines.filter((g) => g.category === activeCategory);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center pt-24">
+        <Loader2 className="h-8 w-8 animate-spin text-t2w-accent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 pb-16">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -18,16 +18,108 @@ import {
   Bike,
   User,
   IndianRupee,
+  Loader2,
 } from "lucide-react";
-import { mockRides } from "@/data/mock";
+import { api } from "@/lib/api-client";
+import { useAuth } from "@/context/AuthContext";
+
+interface Ride {
+  id: string;
+  title: string;
+  rideNumber: string;
+  type: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  startLocation: string;
+  endLocation: string;
+  route: string[];
+  highlights: string[];
+  distanceKm: number;
+  maxRiders: number;
+  registeredRiders: number;
+  difficulty: string;
+  description: string;
+  fee: number;
+  leadRider: string;
+  sweepRider: string;
+  registrations: unknown[];
+}
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
-  const ride = mockRides.find((r) => r.id === rideId);
+  const { user } = useAuth();
+  const [ride, setRide] = useState<Ride | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
 
-  if (!ride) {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    api.rides
+      .get(rideId)
+      .then((data) => {
+        if (cancelled) return;
+        const result = data as { ride: Ride };
+        const r = result.ride;
+        // Ensure route and highlights are arrays (parse if they come as strings)
+        if (typeof r.route === "string") {
+          r.route = JSON.parse(r.route);
+        }
+        if (typeof r.highlights === "string") {
+          r.highlights = JSON.parse(r.highlights);
+        }
+        setRide(r);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err.message || "Failed to load ride");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rideId]);
+
+  const handleRegister = async () => {
+    if (!agreed || registering) return;
+    setRegistering(true);
+    try {
+      const data = (await api.rides.register(rideId, {
+        agreedIndemnity: true,
+      })) as { registration: unknown; confirmationCode: string };
+      setRegistered(true);
+      setConfirmationCode(data.confirmationCode);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Registration failed";
+      alert(message);
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center pt-24">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-t2w-accent" />
+          <p className="mt-4 text-t2w-muted">Loading ride details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !ride) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-24">
         <div className="text-center">
@@ -36,7 +128,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
             Ride Not Found
           </h2>
           <Link href="/rides" className="mt-4 inline-block text-t2w-accent">
-            ← Back to Rides
+            &larr; Back to Rides
           </Link>
         </div>
       </div>
@@ -148,7 +240,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                       {stop}
                     </div>
                     {i < ride.route.length - 1 && (
-                      <span className="text-t2w-muted">→</span>
+                      <span className="text-t2w-muted">&rarr;</span>
                     )}
                   </div>
                 ))}
@@ -233,7 +325,16 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   Register for this Ride
                 </h3>
 
-                {spotsLeft > 0 ? (
+                {!user ? (
+                  <div className="rounded-xl bg-t2w-surface-light p-4 text-center">
+                    <p className="text-sm text-t2w-muted mb-3">
+                      You must be logged in to register for a ride.
+                    </p>
+                    <Link href="/login" className="btn-primary inline-block">
+                      Log In to Register
+                    </Link>
+                  </div>
+                ) : spotsLeft > 0 ? (
                   <>
                     <div className="mb-4 rounded-xl bg-t2w-accent/10 p-4">
                       <div className="flex items-center justify-between">
@@ -289,15 +390,17 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         </div>
 
                         <button
-                          disabled={!agreed}
-                          onClick={() => setRegistered(true)}
+                          disabled={!agreed || registering}
+                          onClick={handleRegister}
                           className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                            agreed
+                            agreed && !registering
                               ? "btn-primary"
                               : "cursor-not-allowed bg-t2w-surface-light text-t2w-muted"
                           }`}
                         >
-                          Confirm & Pay ₹{ride.fee.toLocaleString()}
+                          {registering
+                            ? "Processing..."
+                            : `Confirm & Pay ₹${ride.fee.toLocaleString()}`}
                         </button>
                       </div>
                     )}
@@ -325,8 +428,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     ride details and meeting point information.
                   </p>
                   <div className="mt-4 rounded-xl bg-t2w-surface p-3 font-mono text-sm text-t2w-accent">
-                    Confirmation #{ride.rideNumber}-
-                    {Math.random().toString(36).substring(2, 8).toUpperCase()}
+                    Confirmation #{confirmationCode}
                   </div>
                 </div>
               </div>
