@@ -134,7 +134,7 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
         {/* CTA */}
         {ride.status === "upcoming" && spotsLeft > 0 && (
           <Link
-            href={`/ride/${ride.id}`}
+            href={`/ride?id=${ride.id}`}
             className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-t2w-accent/10 py-3 text-sm font-semibold text-t2w-accent transition-all hover:bg-t2w-accent hover:text-white"
           >
             Register Now
@@ -225,7 +225,7 @@ export function UpcomingRides() {
             {recent.map((ride) => (
               <Link
                 key={ride.id}
-                href={`/ride/${ride.id}`}
+                href={`/ride?id=${ride.id}`}
                 className="card-interactive group"
               >
                 <div className="mb-3 flex items-center justify-between">

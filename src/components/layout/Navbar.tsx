@@ -43,6 +43,8 @@ export function Navbar() {
 
   return (
     <nav
+      role="navigation"
+      aria-label="Main navigation"
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
         scrolled
           ? "glass border-b border-white/5 py-3"

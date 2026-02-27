@@ -54,9 +54,9 @@ export function Footer() {
               </div>
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-t2w-muted">
-              India&apos;s premier motorcycle riding community. Every ride tells a
-              story, every road leads to adventure. Join us and write your own
-              tale.
+              India&apos;s premier motorcycle riding community based in Bangalore,
+              Karnataka. Group rides to Nandi Hills, Coorg, Chikmagalur,
+              Hampi, Goa, Rajasthan &amp; across India. Every ride tells a story.
             </p>
 
             {/* Social Links */}
@@ -156,8 +156,40 @@ export function Footer() {
           </div>
         </div>
 
+        {/* Popular Routes - SEO keyword-rich section */}
+        <div className="mt-12 border-t border-t2w-border pt-8">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white">
+            Popular Motorcycle Routes from Bangalore
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Bangalore to Nandi Hills",
+              "Bangalore to Coorg",
+              "Bangalore to Chikmagalur",
+              "Bangalore to Mysore",
+              "Bangalore to Hampi",
+              "Bangalore to Ooty",
+              "Bangalore to Sakleshpur",
+              "Bangalore to Goa",
+              "Mumbai to Alibaug",
+              "Mumbai to Goa",
+              "Pune to Mahabaleshwar",
+              "Manali to Spiti",
+              "Jaipur to Udaipur",
+            ].map((route) => (
+              <Link
+                key={route}
+                href="/rides"
+                className="rounded-lg border border-t2w-border bg-t2w-surface px-3 py-1.5 text-xs text-t2w-muted transition-colors hover:border-t2w-accent/50 hover:text-white"
+              >
+                {route}
+              </Link>
+            ))}
+          </div>
+        </div>
+
         {/* Bottom */}
-        <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-t2w-border pt-8 sm:flex-row">
+        <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-t2w-border pt-8 sm:flex-row">
           <p className="text-sm text-t2w-muted">
             &copy; {new Date().getFullYear()} Tales on 2 Wheels. All rights
             reserved.

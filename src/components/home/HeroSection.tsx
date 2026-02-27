@@ -78,9 +78,9 @@ export function HeroSection() {
                 : "translate-y-8 opacity-0"
             }`}
           >
-            Join India&apos;s most passionate motorcycle riding community.
-            Discover epic routes, forge lifelong bonds, and write your own tale
-            on two wheels.
+            India&apos;s premier motorcycle riding community, based in Bangalore.
+            Group rides to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa &amp;
+            across India. Join 500+ riders and write your own tale on two wheels.
           </p>
 
           {/* CTAs */}

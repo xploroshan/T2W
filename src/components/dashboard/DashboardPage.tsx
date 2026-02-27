@@ -258,7 +258,7 @@ export function DashboardPage() {
                   <h3 className="mb-4 font-display text-lg font-bold text-white">Upcoming Rides</h3>
                   <div className="space-y-3">
                     {upcomingRides.slice(0, 3).map((ride) => (
-                      <Link key={ride.id} href={`/ride/${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
+                      <Link key={ride.id} href={`/ride?id=${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-400/10">
                           <Calendar className="h-5 w-5 text-blue-400" />
                         </div>
@@ -281,7 +281,7 @@ export function DashboardPage() {
                   <h3 className="mb-4 font-display text-lg font-bold text-white">Recent Rides</h3>
                   <div className="space-y-3">
                     {completedRides.slice(0, 3).map((ride) => (
-                      <Link key={ride.id} href={`/ride/${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
+                      <Link key={ride.id} href={`/ride?id=${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-400/10">
                           <MapPin className="h-5 w-5 text-green-400" />
                         </div>
@@ -309,7 +309,7 @@ export function DashboardPage() {
                 </h3>
                 <div className="space-y-4">
                   {completedRides.map((ride) => (
-                    <Link key={ride.id} href={`/ride/${ride.id}`} className="card-interactive flex items-center gap-6">
+                    <Link key={ride.id} href={`/ride?id=${ride.id}`} className="card-interactive flex items-center gap-6">
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/20">
                         <Gauge className="h-8 w-8 text-t2w-accent" />
                       </div>
