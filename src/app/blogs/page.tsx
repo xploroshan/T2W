@@ -2,13 +2,29 @@ import type { Metadata } from "next";
 import { BlogsPage } from "@/components/blogs/BlogsPage";
 
 export const metadata: Metadata = {
-  title: "Blogs & Vlogs",
+  title:
+    "Motorcycle Blog & Vlogs | Riding Tips, Gear Reviews & Travel Stories",
   description:
-    "Read official T2W blogs, personal rider stories, gear reviews, riding tips, and watch vlogs from motorcycle adventures across India.",
+    "Read T2W blogs on motorcycle riding tips, gear guides for Indian roads, personal ride stories from Bangalore to Ladakh, route guides, bike comparisons (Royal Enfield vs KTM), and watch riding vlogs from experienced Indian riders.",
+  keywords: [
+    "motorcycle blog India",
+    "riding tips India",
+    "motorcycle gear guide India",
+    "bike comparison India",
+    "Royal Enfield Himalayan review",
+    "motorcycle travel blog",
+    "Bangalore motorcycle routes",
+    "riding techniques",
+    "motorcycle vlog India",
+    "best bike routes Karnataka",
+  ],
   openGraph: {
-    title: "Blogs & Vlogs | Tales on 2 Wheels",
+    title: "Motorcycle Blog & Vlogs | Tales on 2 Wheels",
     description:
-      "Stories, tips, and tales from the T2W motorcycle riding community.",
+      "Riding tips, gear reviews, travel stories, and vlogs from India's premier motorcycle community.",
+  },
+  alternates: {
+    canonical: "https://talesontwowheels.com/blogs",
   },
 };
 

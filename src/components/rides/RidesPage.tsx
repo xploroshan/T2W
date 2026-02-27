@@ -219,7 +219,7 @@ export function RidesPage() {
             {filtered.map((ride) => (
               <Link
                 key={ride.id}
-                href={`/ride/${ride.id}`}
+                href={`/ride?id=${ride.id}`}
                 className="card-interactive group relative overflow-hidden"
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-t2w-accent to-t2w-gold opacity-0 transition-opacity group-hover:opacity-100" />
@@ -347,7 +347,7 @@ export function RidesPage() {
                     <td className="px-6 py-4">
                       <div>
                         <Link
-                          href={`/ride/${ride.id}`}
+                          href={`/ride?id=${ride.id}`}
                           className="font-semibold text-white hover:text-t2w-accent transition-colors"
                         >
                           {ride.title}
@@ -382,7 +382,7 @@ export function RidesPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link
-                        href={`/ride/${ride.id}`}
+                        href={`/ride?id=${ride.id}`}
                         className="text-sm font-medium text-t2w-accent hover:text-t2w-accent/80 transition-colors"
                       >
                         View Details →

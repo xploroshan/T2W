@@ -198,6 +198,148 @@ export const mockRides: Ride[] = [
     leadRider: "Kiran Patel",
     sweepRider: "Rahul Desai",
   },
+  // ── Bangalore-focused rides ──
+  {
+    id: "ride-8",
+    title: "Nandi Hills Dawn Blaster",
+    rideNumber: "T2W-2026-004",
+    type: "day",
+    status: "upcoming",
+    startDate: "2026-03-22",
+    endDate: "2026-03-22",
+    startLocation: "Bangalore, Karnataka",
+    endLocation: "Nandi Hills, Karnataka",
+    route: ["Bangalore", "Devanahalli", "Nandi Hills"],
+    distanceKm: 65,
+    maxRiders: 40,
+    registeredRiders: 28,
+    difficulty: "easy",
+    description:
+      "The classic Bangalore sunrise ride! Depart at 4:30 AM, cruise through empty city streets, climb the winding ghats, and watch the sun rise over the cloud-covered valley from atop Nandi Hills. Breakfast at Kamat's on the way back.",
+    highlights: [
+      "Sunrise at 5,000 ft",
+      "Cloud-covered valleys",
+      "Early morning empty roads",
+      "South Indian breakfast stop",
+    ],
+    fee: 300,
+    leadRider: "Kiran Patel",
+    sweepRider: "Sneha Kulkarni",
+  },
+  {
+    id: "ride-9",
+    title: "Bangalore to Hampi Heritage Ride",
+    rideNumber: "T2W-2026-005",
+    type: "multi-day",
+    status: "upcoming",
+    startDate: "2026-04-12",
+    endDate: "2026-04-14",
+    startLocation: "Bangalore, Karnataka",
+    endLocation: "Hampi, Karnataka",
+    route: ["Bangalore", "Chitradurga", "Hospet", "Hampi"],
+    distanceKm: 380,
+    maxRiders: 25,
+    registeredRiders: 15,
+    difficulty: "moderate",
+    description:
+      "Ride from the Silicon Valley of India to the ruins of the Vijayanagara Empire. Explore boulder-strewn landscapes, ancient temples, and witness some of the most surreal scenery in South India. Camp under the stars near the Tungabhadra river.",
+    highlights: [
+      "UNESCO World Heritage Site",
+      "Vijayanagara ruins",
+      "Coracle ride on Tungabhadra",
+      "Sunset at Hemakuta Hill",
+    ],
+    fee: 6500,
+    leadRider: "Arjun Mehta",
+    sweepRider: "Vikram Singh",
+  },
+  {
+    id: "ride-10",
+    title: "Chikmagalur Coffee & Curves",
+    rideNumber: "T2W-2026-006",
+    type: "weekend",
+    status: "upcoming",
+    startDate: "2026-03-29",
+    endDate: "2026-03-30",
+    startLocation: "Bangalore, Karnataka",
+    endLocation: "Chikmagalur, Karnataka",
+    route: [
+      "Bangalore",
+      "Hassan",
+      "Belur",
+      "Chikmagalur",
+      "Mullayanagiri",
+    ],
+    distanceKm: 320,
+    maxRiders: 20,
+    registeredRiders: 14,
+    difficulty: "moderate",
+    description:
+      "Twist through the coffee country of Karnataka on this spectacular weekend ride. Visit the 12th-century Hoysala temples at Belur, ride to the highest peak in Karnataka at Mullayanagiri (1,930m), and wake up to the aroma of freshly brewed filter coffee in a plantation homestay.",
+    highlights: [
+      "Mullayanagiri peak climb",
+      "Hoysala temple architecture",
+      "Coffee plantation homestay",
+      "Baba Budangiri cave temple",
+    ],
+    fee: 3500,
+    leadRider: "Priya Sharma",
+    sweepRider: "Kiran Patel",
+  },
+  {
+    id: "ride-11",
+    title: "Sakleshpur Railway Track Trail",
+    rideNumber: "T2W-2025-049",
+    type: "day",
+    status: "completed",
+    startDate: "2026-02-08",
+    endDate: "2026-02-08",
+    startLocation: "Bangalore, Karnataka",
+    endLocation: "Sakleshpur, Karnataka",
+    route: ["Bangalore", "Channarayapatna", "Hassan", "Sakleshpur"],
+    distanceKm: 230,
+    maxRiders: 25,
+    registeredRiders: 23,
+    difficulty: "easy",
+    description:
+      "Ride through the scenic Western Ghats foothills to Sakleshpur, famous for its abandoned railway track trek. Stop at Manjarabad Fort and explore the lush green countryside that makes this one of Karnataka's best-kept secrets.",
+    highlights: [
+      "Manjarabad Fort visit",
+      "Western Ghats scenery",
+      "Railway track viewpoint",
+      "Pepper & cardamom estates",
+    ],
+    fee: 800,
+    leadRider: "Vikram Singh",
+    sweepRider: "Rahul Desai",
+  },
+  {
+    id: "ride-12",
+    title: "Mysore Palace Express",
+    rideNumber: "T2W-2025-050",
+    type: "day",
+    status: "completed",
+    startDate: "2026-02-15",
+    endDate: "2026-02-15",
+    startLocation: "Bangalore, Karnataka",
+    endLocation: "Mysore, Karnataka",
+    route: ["Bangalore", "Ramnagara", "Mandya", "Srirangapatna", "Mysore"],
+    distanceKm: 160,
+    maxRiders: 35,
+    registeredRiders: 32,
+    difficulty: "easy",
+    description:
+      "The iconic Bangalore-Mysore expressway ride, stopping at Ramnagara (Sholay filming location), the island fortress of Srirangapatna, and culminating at the magnificent Mysore Palace. Perfect for a quick weekend getaway.",
+    highlights: [
+      "Mysore Palace illumination",
+      "Srirangapatna island fort",
+      "Ramnagara boulders",
+      "Chamundi Hills viewpoint",
+    ],
+    fee: 500,
+    leadRider: "Kiran Patel",
+    sweepRider: "Sneha Kulkarni",
+  },
 ];
 
 export const mockBlogs: BlogPost[] = [
@@ -206,7 +348,8 @@ export const mockBlogs: BlogPost[] = [
     title: "The Art of Cornering: Mastering Twisty Mountain Roads",
     excerpt:
       "Learn the techniques that separate confident riders from cautious ones on challenging mountain roads. From body positioning to throttle control.",
-    content: "",
+    content:
+      "Cornering is where the magic happens on a motorcycle. Whether you're carving through the Western Ghats hairpins or navigating the 36 bends to Ooty, proper technique makes the difference between a white-knuckle experience and pure flow state. In this guide, we break down body positioning, throttle control, line selection, and the all-important concept of 'slow in, fast out' that every T2W rider lives by.",
     author: "Arjun Mehta",
     publishDate: "2026-02-10",
     tags: ["riding-tips", "technique", "mountains"],
@@ -220,7 +363,8 @@ export const mockBlogs: BlogPost[] = [
     title: "Spiti Diaries: 10 Days Above the Clouds",
     excerpt:
       "A rider's personal account of the T2W Spiti Valley Expedition. From altitude sickness to soul-stirring sunrises at 15,000 feet.",
-    content: "",
+    content:
+      "Day 1 started with nervous excitement as 15 riders gathered in Manali's Mall Road. By Day 3, crossing Kunzum Pass at 15,000 feet, the altitude hit hard. But nothing prepared us for the ethereal beauty of Chandratal Lake at dawn - a turquoise mirror reflecting snow-capped peaks. This is my personal account of the most transformative motorcycle journey of my life.",
     author: "Priya Sharma",
     publishDate: "2026-01-28",
     tags: ["travel", "spiti", "expedition", "adventure"],
@@ -231,10 +375,11 @@ export const mockBlogs: BlogPost[] = [
   },
   {
     id: "blog-3",
-    title: "Gear Guide 2026: Essential Riding Equipment",
+    title: "Gear Guide 2026: Essential Riding Equipment for Indian Roads",
     excerpt:
       "Our comprehensive guide to the best riding gear available in India. From helmets to boots, we cover everything you need for a safe ride.",
-    content: "",
+    content:
+      "Riding gear in India has evolved massively. From the days of wearing just a half-face helmet, Indian riders now have access to world-class gear from brands like Rynox, Royal Enfield, Viaterra, and Solace. In this comprehensive guide, we review the best helmets (ISI & ECE certified), jackets, gloves, boots, and pants available in 2026, with options for every budget from Rs. 5,000 to Rs. 50,000.",
     author: "T2W Team",
     publishDate: "2026-02-15",
     tags: ["gear", "safety", "guide"],
@@ -248,7 +393,8 @@ export const mockBlogs: BlogPost[] = [
     title: "Night Riding: Tips for Safe After-Dark Adventures",
     excerpt:
       "Night riding can be magical but dangerous. Here are essential tips from our veteran riders on staying safe while enjoying the moonlit roads.",
-    content: "",
+    content:
+      "There's something special about riding under a canopy of stars on an empty highway. But night riding demands extra caution. In this video, Vikram Singh shares his 10 years of night riding experience - from headlight upgrades to reflective gear, fatigue management, and the best night routes around Bangalore and Mumbai.",
     author: "Vikram Singh",
     publishDate: "2026-01-15",
     tags: ["safety", "tips", "night-riding"],
@@ -263,14 +409,52 @@ export const mockBlogs: BlogPost[] = [
     title: "My First T2W Ride: A Newbie's Experience",
     excerpt:
       "I was nervous, excited, and everything in between. Here's what my first group ride with Tales on 2 Wheels was really like.",
-    content: "",
+    content:
+      "I'd been riding solo for 2 years before I found T2W on Instagram. The idea of riding in a group of 25 strangers terrified me. But from the moment I arrived at the meeting point on Brigade Road, Bangalore, I knew this was different. The pre-ride briefing was thorough, the formation riding was disciplined, and by the time we stopped for chai at Ramnagara, I'd made 5 new friends who I now ride with every weekend.",
     author: "Sneha Kulkarni",
     publishDate: "2026-02-01",
-    tags: ["experience", "first-ride", "community"],
+    tags: ["experience", "first-ride", "community", "bangalore"],
     type: "personal",
     isVlog: false,
     readTime: 5,
     likes: 175,
+  },
+  {
+    id: "blog-6",
+    title: "Top 10 Motorcycle Rides Near Bangalore for Weekend Getaways",
+    excerpt:
+      "Bangalore is a biker's paradise with incredible rides in every direction. Here are the 10 best routes for a weekend escape from the city.",
+    content:
+      "Living in Bangalore means you're within striking distance of some of India's most spectacular riding roads. From the twisties of Coorg to the plains of Hampi, the ghats of Chikmagalur to the coastal roads of Mangalore - here's our definitive guide to the 10 best motorcycle rides from Bangalore, complete with distance, difficulty, best season, and T2W's insider tips for each route.",
+    author: "Arjun Mehta",
+    publishDate: "2026-02-20",
+    tags: [
+      "bangalore",
+      "routes",
+      "guide",
+      "weekend-rides",
+      "karnataka",
+    ],
+    type: "official",
+    isVlog: false,
+    readTime: 10,
+    likes: 412,
+  },
+  {
+    id: "blog-7",
+    title: "Royal Enfield vs KTM: Which Adventure Bike for Indian Touring?",
+    excerpt:
+      "The age-old debate settled by riders who've done 50,000+ km on both. Real-world comparison for Indian touring conditions.",
+    content:
+      "We put the Royal Enfield Himalayan 450 head-to-head with the KTM 390 Adventure across 5,000 km of Indian roads - from Bangalore to Ladakh and back. Comfort, reliability, fuel efficiency, luggage capacity, off-road capability, and service network - we score every category based on real-world touring experience, not showroom specs.",
+    author: "Vikram Singh",
+    publishDate: "2026-02-25",
+    tags: ["bikes", "review", "comparison", "royal-enfield", "ktm"],
+    type: "official",
+    isVlog: true,
+    videoUrl: "https://youtube.com/watch?v=example2",
+    readTime: 14,
+    likes: 523,
   },
 ];
 
@@ -310,6 +494,24 @@ export const mockNotifications: Notification[] = [
     type: "success",
     date: "2026-02-18",
     isRead: true,
+  },
+  {
+    id: "notif-5",
+    title: "Nandi Hills Dawn Blaster - New Ride!",
+    message:
+      "A brand new early morning ride from Bangalore to Nandi Hills on March 22. Limited to 40 riders!",
+    type: "ride",
+    date: "2026-02-25",
+    isRead: false,
+  },
+  {
+    id: "notif-6",
+    title: "Bangalore Chapter Launched!",
+    message:
+      "T2W officially launches its Bangalore chapter. Weekly rides from Brigade Road every Saturday at 6 AM.",
+    type: "success",
+    date: "2026-02-27",
+    isRead: false,
   },
 ];
 
@@ -429,5 +631,122 @@ export const mockGuidelines: Guideline[] = [
       "Always start a ride with a full tank. Know your bike's range and plan fuel stops accordingly. The ride leader will announce fuel stops. If you notice your fuel is running low, signal the group to stop. Carry a 1-liter emergency fuel reserve on long rides.",
     category: "general",
     icon: "fuel",
+  },
+];
+
+// ── Admin / Dashboard mock data ──
+
+export const mockPendingUsers = [
+  {
+    id: "pending-1",
+    name: "Aditya Verma",
+    email: "aditya.v@gmail.com",
+    phone: "+91 99887 76543",
+    city: "Bangalore",
+    ridingExperience: "intermediate",
+    motorcycles: [{ make: "Royal Enfield", model: "Classic 350" }],
+    createdAt: "2026-02-25",
+  },
+  {
+    id: "pending-2",
+    name: "Meera Nair",
+    email: "meera.n@outlook.com",
+    phone: "+91 88776 65432",
+    city: "Chennai",
+    ridingExperience: "beginner",
+    motorcycles: [{ make: "Honda", model: "CB300R" }],
+    createdAt: "2026-02-26",
+  },
+  {
+    id: "pending-3",
+    name: "Rajesh Kumar",
+    email: "rajesh.k@yahoo.com",
+    phone: "+91 77665 54321",
+    city: "Hyderabad",
+    ridingExperience: "experienced",
+    motorcycles: [{ make: "Kawasaki", model: "Versys 650" }],
+    createdAt: "2026-02-27",
+  },
+];
+
+export const mockAllUsers = [
+  {
+    id: "admin-1",
+    name: "Arjun Mehta",
+    email: "admin@t2w.com",
+    role: "admin",
+    isApproved: true,
+    joinDate: "2023-01-01",
+  },
+  {
+    id: "user-1",
+    name: "Rohan Kapoor",
+    email: "rohan@example.com",
+    role: "rider",
+    isApproved: true,
+    joinDate: "2024-06-15",
+  },
+  {
+    id: "user-2",
+    name: "Sneha Kulkarni",
+    email: "sneha@example.com",
+    role: "rider",
+    isApproved: true,
+    joinDate: "2024-08-20",
+  },
+  {
+    id: "user-3",
+    name: "Vikram Singh",
+    email: "vikram@example.com",
+    role: "admin",
+    isApproved: true,
+    joinDate: "2023-03-15",
+  },
+  {
+    id: "user-4",
+    name: "Priya Sharma",
+    email: "priya@example.com",
+    role: "admin",
+    isApproved: true,
+    joinDate: "2023-02-10",
+  },
+  {
+    id: "user-5",
+    name: "Rahul Desai",
+    email: "rahul@example.com",
+    role: "rider",
+    isApproved: true,
+    joinDate: "2024-01-08",
+  },
+];
+
+export const mockContentItems = [
+  {
+    id: "content-1",
+    title: "T2W Brand Guidelines",
+    type: "Brand",
+    status: "published",
+    lastUpdated: "2026-01-15",
+  },
+  {
+    id: "content-2",
+    title: "Ride Photography Collection 2025",
+    type: "Media",
+    status: "published",
+    lastUpdated: "2026-02-01",
+  },
+  {
+    id: "content-3",
+    title: "Indemnity Form Template",
+    type: "Document",
+    status: "published",
+    lastUpdated: "2025-12-20",
+  },
+  {
+    id: "content-4",
+    title: "Social Media Content Calendar",
+    type: "Document",
+    status: "draft",
+    lastUpdated: "2026-02-20",
   },
 ];

@@ -57,7 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const data = await api.auth.me() as { user: UserData };
+      const raw = await api.auth.me();
+      const data = raw as unknown as { user: UserData };
       setUser(data.user);
     } catch {
       setUser(null);
@@ -69,12 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string) => {
-    const data = await api.auth.login(email, password) as { user: UserData };
+    const raw = await api.auth.login(email, password);
+    const data = raw as unknown as { user: UserData };
     setUser(data.user);
   };
 
   const register = async (formData: Record<string, unknown>) => {
-    const data = await api.auth.register(formData) as { user: UserData };
+    const raw = await api.auth.register(formData);
+    const data = raw as unknown as { user: UserData };
     setUser(data.user);
   };
 

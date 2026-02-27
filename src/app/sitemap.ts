@@ -1,5 +1,5 @@
 import { MetadataRoute } from "next";
-import { mockRides } from "@/data/mock";
+import { mockRides, mockBlogs } from "@/data/mock";
 
 export const dynamic = "force-static";
 
@@ -7,10 +7,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://talesontwowheels.com";
 
   const rideUrls = mockRides.map((ride) => ({
-    url: `${baseUrl}/ride/${ride.id}`,
+    url: `${baseUrl}/ride?id=${ride.id}`,
     lastModified: new Date(ride.startDate),
     changeFrequency: "weekly" as const,
     priority: 0.8,
+  }));
+
+  const blogUrls = mockBlogs.map((blog) => ({
+    url: `${baseUrl}/blogs#${blog.id}`,
+    lastModified: new Date(blog.publishDate),
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
   }));
 
   return [
@@ -39,17 +46,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/login`,
+      url: `${baseUrl}/ride`,
       lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
-    {
-      url: `${baseUrl}/register`,
-      lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 0.4,
+      changeFrequency: "daily",
+      priority: 0.8,
     },
     ...rideUrls,
+    ...blogUrls,
   ];
 }
