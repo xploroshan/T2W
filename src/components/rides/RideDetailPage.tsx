@@ -33,6 +33,18 @@ import { useAuth } from "@/context/AuthContext";
 import { riderNameToId } from "@/data/rider-profiles";
 import type { RidePost } from "@/types";
 
+// Helper: look up a rider profile link by name
+function getRiderLink(name: string): string | null {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+  return riderNameToId[key] ? `/rider?id=${riderNameToId[key]}` : null;
+}
+
+// Helper: build a Google Maps search URL for a location
+function getGoogleMapsUrl(location: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+}
+
 interface Ride {
   id: string;
   title: string;
@@ -106,6 +118,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     }
   }, [user]);
 
+  const [posterUploading, setPosterUploading] = useState(false);
+
   const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -113,17 +127,45 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       alert("Please select an image file");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image must be under 10MB");
+    if (file.size > 15 * 1024 * 1024) {
+      alert("Image must be under 15MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setPosterUrl(dataUrl);
-      localStorage.setItem(`t2w_poster_${rideId}`, dataUrl);
+    setPosterUploading(true);
+
+    // Compress image via canvas to avoid localStorage quota issues
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 1200;
+      let width = img.width;
+      let height = img.height;
+      if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { setPosterUploading(false); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+      try {
+        localStorage.setItem(`t2w_poster_${rideId}`, dataUrl);
+        setPosterUrl(dataUrl);
+      } catch {
+        alert("Image too large to save. Please use a smaller image.");
+      }
+      setPosterUploading(false);
     };
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      alert("Failed to load image. Please try another file.");
+      setPosterUploading(false);
+    };
+    img.src = objectUrl;
   };
 
   useEffect(() => {
@@ -301,10 +343,15 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               <>
                 <button
                   onClick={() => posterInputRef.current?.click()}
+                  disabled={posterUploading}
                   className="absolute bottom-3 right-3 flex items-center gap-2 rounded-xl bg-black/70 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  <ImagePlus className="h-4 w-4" />
-                  Change Poster
+                  {posterUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                  {posterUploading ? "Saving..." : "Change Poster"}
                 </button>
                 <input
                   ref={posterInputRef}
@@ -320,10 +367,17 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           <div className="mb-8">
             <button
               onClick={() => posterInputRef.current?.click()}
+              disabled={posterUploading}
               className="flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-t2w-border bg-t2w-surface/50 py-10 text-t2w-muted transition-colors hover:border-t2w-accent/50 hover:text-t2w-accent"
             >
-              <ImagePlus className="h-6 w-6" />
-              <span className="text-sm font-medium">Upload Ride Poster</span>
+              {posterUploading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <ImagePlus className="h-6 w-6" />
+              )}
+              <span className="text-sm font-medium">
+                {posterUploading ? "Compressing & Saving..." : "Upload Ride Poster"}
+              </span>
             </button>
             <input
               ref={posterInputRef}
@@ -427,26 +481,38 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 Ride Crew
               </h3>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-t2w-accent/10">
-                    <User className="h-6 w-6 text-t2w-accent" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-t2w-muted">Lead Rider</p>
-                    <p className="font-semibold text-white">{ride.leadRider}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-t2w-gold/10">
-                    <User className="h-6 w-6 text-t2w-gold" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-t2w-muted">Sweep Rider</p>
-                    <p className="font-semibold text-white">
-                      {ride.sweepRider}
-                    </p>
-                  </div>
-                </div>
+                {[
+                  { label: "Lead Rider", name: ride.leadRider, iconColor: "bg-t2w-accent/10", textColor: "text-t2w-accent" },
+                  { label: "Sweep Rider", name: ride.sweepRider, iconColor: "bg-t2w-gold/10", textColor: "text-t2w-gold" },
+                  ...(ride.organisedBy && ride.organisedBy !== ride.leadRider && ride.organisedBy !== ride.sweepRider
+                    ? [{ label: "Organised By", name: ride.organisedBy, iconColor: "bg-purple-400/10", textColor: "text-purple-400" }]
+                    : []),
+                  ...(ride.accountsBy && ride.accountsBy !== ride.leadRider && ride.accountsBy !== ride.sweepRider && ride.accountsBy !== ride.organisedBy
+                    ? [{ label: "Accounts", name: ride.accountsBy, iconColor: "bg-green-400/10", textColor: "text-green-400" }]
+                    : []),
+                ].filter(c => c.name).map((crew) => {
+                  const link = getRiderLink(crew.name);
+                  const inner = (
+                    <>
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${crew.iconColor}`}>
+                        <User className={`h-6 w-6 ${crew.textColor}`} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-t2w-muted">{crew.label}</p>
+                        <p className={`font-semibold ${link ? "text-t2w-accent" : "text-white"}`}>{crew.name}</p>
+                      </div>
+                    </>
+                  );
+                  return link ? (
+                    <Link key={crew.label} href={link} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30">
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={crew.label} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4">
+                      {inner}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -930,25 +996,39 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 {ride.organisedBy && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-t2w-muted">Organised By</span>
-                    <span className="font-medium text-white">
-                      {ride.organisedBy}
-                    </span>
+                    {getRiderLink(ride.organisedBy) ? (
+                      <Link href={getRiderLink(ride.organisedBy)!} className="font-medium text-t2w-accent hover:underline">
+                        {ride.organisedBy}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-white">{ride.organisedBy}</span>
+                    )}
                   </div>
                 )}
                 {ride.accountsBy && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-t2w-muted">Accounts</span>
-                    <span className="font-medium text-white">
-                      {ride.accountsBy}
-                    </span>
+                    {getRiderLink(ride.accountsBy) ? (
+                      <Link href={getRiderLink(ride.accountsBy)!} className="font-medium text-t2w-accent hover:underline">
+                        {ride.accountsBy}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-white">{ride.accountsBy}</span>
+                    )}
                   </div>
                 )}
                 {ride.startingPoint && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-t2w-muted">Starting Point</span>
-                    <span className="font-medium text-white">
+                    <a
+                      href={getGoogleMapsUrl(ride.startingPoint)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-t2w-accent hover:underline flex items-center gap-1"
+                    >
+                      <MapPin className="h-3 w-3" />
                       {ride.startingPoint}
-                    </span>
+                    </a>
                   </div>
                 )}
                 {ride.meetupTime && (

@@ -28,8 +28,8 @@ const footerLinks = {
   company: [
     { label: "About Us", href: "/#about" },
     { label: "Contact", href: "/#contact" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
+    { label: "Privacy Policy", href: "/guidelines" },
+    { label: "Terms of Service", href: "/guidelines" },
   ],
 };
 
@@ -62,14 +62,16 @@ export function Footer() {
             {/* Social Links */}
             <div className="mt-6 flex items-center gap-3">
               {[
-                { icon: Instagram, href: "#", label: "Instagram" },
-                { icon: Youtube, href: "#", label: "YouTube" },
-                { icon: Facebook, href: "#", label: "Facebook" },
-                { icon: Twitter, href: "#", label: "Twitter" },
+                { icon: Instagram, href: "https://www.instagram.com/Tales.On.2.Wheels", label: "Instagram" },
+                { icon: Youtube, href: "https://www.youtube.com/@TalesOn2Wheels", label: "YouTube" },
+                { icon: Facebook, href: "https://www.facebook.com/TalesOn2Wheels", label: "Facebook" },
+                { icon: Twitter, href: "https://x.com/TalesOn2Wheels", label: "Twitter" },
               ].map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
                   href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={label}
                   className="flex h-10 w-10 items-center justify-center rounded-xl border border-t2w-border bg-t2w-surface text-t2w-muted transition-all duration-200 hover:border-t2w-accent/50 hover:text-t2w-accent"
                 >
@@ -146,7 +148,7 @@ export function Footer() {
                 Info@taleson2wheels.com
               </a>
               <a
-                href="tel:+919876543210"
+                href="tel:+919880141543"
                 className="flex items-center gap-2 text-sm text-t2w-muted transition-colors hover:text-white"
               >
                 <Phone className="h-4 w-4" />
