@@ -387,20 +387,30 @@ export const api = {
       if (params?.includes("pending")) {
         return { users: mockPendingUsers };
       }
-      // Merge mockAllUsers with registered users
+      // Start with registered users (built-in + localStorage signups)
       const registeredUsers = getRegisteredUsers();
-      const combined = mockAllUsers.map((u) => {
+      const combined: Array<{
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        isApproved: boolean;
+        joinDate: string;
+      }> = [];
+
+      // 1. Add all mockAllUsers, merging role from registeredUsers
+      const addedEmails = new Set<string>();
+      mockAllUsers.forEach((u) => {
         const reg = registeredUsers.find(
           (r) => r.email.toLowerCase() === u.email.toLowerCase()
         );
-        return reg ? { ...u, role: reg.role } : u;
+        combined.push(reg ? { ...u, role: reg.role } : u);
+        addedEmails.add(u.email.toLowerCase());
       });
-      // Add registered users not in mockAllUsers
-      const mockEmails = new Set(
-        mockAllUsers.map((u) => u.email.toLowerCase())
-      );
+
+      // 2. Add registered users not already in the list
       registeredUsers
-        .filter((r) => !mockEmails.has(r.email.toLowerCase()))
+        .filter((r) => !addedEmails.has(r.email.toLowerCase()))
         .forEach((r) => {
           combined.push({
             id: r.id,
@@ -410,7 +420,23 @@ export const api = {
             isApproved: r.isApproved,
             joinDate: r.joinDate,
           });
+          addedEmails.add(r.email.toLowerCase());
         });
+
+      // 3. Add all rider profiles from past rides (as t2w_rider)
+      riderProfiles.forEach((rider) => {
+        if (addedEmails.has(rider.email.toLowerCase())) return;
+        combined.push({
+          id: rider.id,
+          name: rider.name,
+          email: rider.email,
+          role: rider.ridesCompleted > 0 ? "t2w_rider" : "rider",
+          isApproved: true,
+          joinDate: rider.joinDate || "2024-03-16",
+        });
+        addedEmails.add(rider.email.toLowerCase());
+      });
+
       return { users: combined };
     },
     get: async (id: string) => {
@@ -809,7 +835,11 @@ export const api = {
       );
       return {
         stats: {
-          totalUsers: mockAllUsers.length + 3,
+          totalUsers: new Set([
+            ...mockAllUsers.map((u) => u.email.toLowerCase()),
+            ...getRegisteredUsers().map((u) => u.email.toLowerCase()),
+            ...riderProfiles.map((r) => r.email.toLowerCase()),
+          ]).size,
           pendingUsers: mockPendingUsers.length,
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
           totalContent: mockContentItems.length,
