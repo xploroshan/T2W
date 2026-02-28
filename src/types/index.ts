@@ -46,6 +46,11 @@ export interface Ride {
   leadRider: string;
   sweepRider: string;
   riders?: string[];
+  accountsBy?: string;
+  organisedBy?: string;
+  meetupTime?: string;
+  rideStartTime?: string;
+  startingPoint?: string;
 }
 
 export interface BlogPost {

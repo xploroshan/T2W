@@ -48,6 +48,11 @@ interface Ride {
   registrations: unknown[];
   riders?: string[];
   posterUrl?: string;
+  accountsBy?: string;
+  organisedBy?: string;
+  meetupTime?: string;
+  rideStartTime?: string;
+  startingPoint?: string;
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
@@ -582,6 +587,46 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         )} Days`}
                   </span>
                 </div>
+                {ride.organisedBy && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Organised By</span>
+                    <span className="font-medium text-white">
+                      {ride.organisedBy}
+                    </span>
+                  </div>
+                )}
+                {ride.accountsBy && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Accounts</span>
+                    <span className="font-medium text-white">
+                      {ride.accountsBy}
+                    </span>
+                  </div>
+                )}
+                {ride.startingPoint && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Starting Point</span>
+                    <span className="font-medium text-white">
+                      {ride.startingPoint}
+                    </span>
+                  </div>
+                )}
+                {ride.meetupTime && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Meetup Time</span>
+                    <span className="font-medium text-white">
+                      {ride.meetupTime}
+                    </span>
+                  </div>
+                )}
+                {ride.rideStartTime && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Ride Starts</span>
+                    <span className="font-medium text-white">
+                      {ride.rideStartTime}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

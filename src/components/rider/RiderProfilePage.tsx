@@ -15,6 +15,12 @@ import {
   Heart,
   Award,
   Loader2,
+  Gauge,
+  Flag,
+  ChevronDown,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import type { RiderProfile } from "@/data/rider-profiles";
@@ -24,6 +30,16 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyContact: "",
+    emergencyPhone: "",
+    bloodGroup: "",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -31,9 +47,24 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       .get(riderId)
       .then((data: any) => {
         setRider(data.rider);
-        // Load saved avatar from localStorage
+        setEditForm({
+          name: data.rider.name,
+          email: data.rider.email,
+          phone: data.rider.phone,
+          address: data.rider.address,
+          emergencyContact: data.rider.emergencyContact,
+          emergencyPhone: data.rider.emergencyPhone,
+          bloodGroup: data.rider.bloodGroup,
+        });
         const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
         if (saved) setAvatarUrl(saved);
+        // Load saved edits
+        const savedEdits = localStorage.getItem(`t2w_profile_${riderId}`);
+        if (savedEdits) {
+          const parsed = JSON.parse(savedEdits);
+          setEditForm((prev) => ({ ...prev, ...parsed }));
+          setRider((prev) => prev ? { ...prev, ...parsed } : prev);
+        }
       })
       .catch((err) => {
         setError(err.message || "Failed to load rider");
@@ -46,17 +77,14 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith("image/")) {
       alert("Please select an image file");
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       alert("Image must be under 5MB");
       return;
     }
-
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
@@ -64,6 +92,28 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       localStorage.setItem(`t2w_avatar_${riderId}`, dataUrl);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = () => {
+    if (!rider) return;
+    const updates = { ...editForm };
+    localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
+    setRider({ ...rider, ...updates });
+    setEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    if (!rider) return;
+    setEditForm({
+      name: rider.name,
+      email: rider.email,
+      phone: rider.phone,
+      address: rider.address,
+      emergencyContact: rider.emergencyContact,
+      emergencyPhone: rider.emergencyPhone,
+      bloodGroup: rider.bloodGroup,
+    });
+    setEditing(false);
   };
 
   if (loading) {
@@ -103,7 +153,6 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     .toUpperCase()
     .slice(0, 2);
 
-  // Determine badge based on ride count
   let badge = { name: "New Rider", color: "text-gray-400", bg: "bg-gray-400/10" };
   if (rider.ridesCompleted >= 20) {
     badge = { name: "Legend", color: "text-yellow-300", bg: "bg-yellow-300/10" };
@@ -210,44 +259,184 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                   })}
                 </span>
               </div>
+
+              {/* Edit button */}
+              <button
+                onClick={() => setEditing(true)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit Profile
+              </button>
             </div>
           </div>
         </div>
 
+        {/* Edit Profile Form */}
+        {editing && (
+          <div className="card mb-8">
+            <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+              <Pencil className="h-5 w-5 text-t2w-accent" />
+              Edit Profile
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, email: e.target.value })
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Phone
+                </label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, phone: e.target.value })
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Blood Group
+                </label>
+                <input
+                  type="text"
+                  value={editForm.bloodGroup}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, bloodGroup: e.target.value })
+                  }
+                  className="input-field"
+                  placeholder="e.g. O+, A-, B+"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  value={editForm.address}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, address: e.target.value })
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Emergency Contact Name
+                </label>
+                <input
+                  type="text"
+                  value={editForm.emergencyContact}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      emergencyContact: e.target.value,
+                    })
+                  }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-t2w-muted">
+                  Emergency Contact Phone
+                </label>
+                <input
+                  type="text"
+                  value={editForm.emergencyPhone}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      emergencyPhone: e.target.value,
+                    })
+                  }
+                  className="input-field"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={handleSaveProfile}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Save className="h-4 w-4" />
+                Save Changes
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+              >
+                <X className="h-4 w-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
-        <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <div className="card text-center">
-            <Bike className="mx-auto h-6 w-6 text-t2w-accent" />
+            <Bike className="mx-auto h-5 w-5 text-t2w-accent" />
             <div className="mt-2 font-display text-2xl font-bold text-white">
               {rider.ridesCompleted}
             </div>
-            <div className="text-xs text-t2w-muted">Rides Completed</div>
+            <div className="text-xs text-t2w-muted">Rides</div>
           </div>
           <div className="card text-center">
-            <Calendar className="mx-auto h-6 w-6 text-t2w-gold" />
+            <Gauge className="mx-auto h-5 w-5 text-t2w-gold" />
             <div className="mt-2 font-display text-2xl font-bold text-white">
-              {rider.ridesParticipated.length > 0
-                ? new Date(
-                    rider.ridesParticipated[
-                      rider.ridesParticipated.length - 1
-                    ].rideDate
-                  ).toLocaleDateString("en-IN", {
-                    month: "short",
-                    year: "2-digit",
-                  })
-                : "N/A"}
+              {rider.totalKm.toLocaleString()}
             </div>
-            <div className="text-xs text-t2w-muted">Last Ride</div>
+            <div className="text-xs text-t2w-muted">Total KMs</div>
           </div>
           <div className="card text-center">
-            <Award className="mx-auto h-6 w-6 text-green-400" />
+            <Flag className="mx-auto h-5 w-5 text-green-400" />
             <div className="mt-2 font-display text-2xl font-bold text-white">
-              {badge.name}
+              {rider.ridesOrganized}
             </div>
-            <div className="text-xs text-t2w-muted">Badge</div>
+            <div className="text-xs text-t2w-muted">Organised</div>
           </div>
           <div className="card text-center">
-            <Heart className="mx-auto h-6 w-6 text-red-400" />
+            <Shield className="mx-auto h-5 w-5 text-blue-400" />
+            <div className="mt-2 font-display text-2xl font-bold text-white">
+              {rider.pilotsDone}
+            </div>
+            <div className="text-xs text-t2w-muted">Pilot</div>
+          </div>
+          <div className="card text-center">
+            <ChevronDown className="mx-auto h-5 w-5 text-orange-400" />
+            <div className="mt-2 font-display text-2xl font-bold text-white">
+              {rider.sweepsDone}
+            </div>
+            <div className="text-xs text-t2w-muted">Sweep</div>
+          </div>
+          <div className="card text-center">
+            <Heart className="mx-auto h-5 w-5 text-red-400" />
             <div className="mt-2 font-display text-2xl font-bold text-white">
               {rider.bloodGroup || "N/A"}
             </div>
@@ -321,9 +510,11 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                         })}
                       </p>
                     </div>
-                    <span className="rounded-lg bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400">
-                      Completed
-                    </span>
+                    <div className="text-right shrink-0">
+                      <span className="font-mono text-sm font-medium text-t2w-gold">
+                        {ride.distanceKm.toLocaleString()} km
+                      </span>
+                    </div>
                   </Link>
                 ))}
             </div>
