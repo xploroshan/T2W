@@ -45,6 +45,7 @@ const NOTIF_KEY = "t2w_notif_read";
 const BLOGS_KEY = "t2w_blogs";
 const RIDE_POSTS_KEY = "t2w_ride_posts";
 const RIDES_KEY = "t2w_custom_rides";
+const DELETED_USERS_KEY = "t2w_deleted_users";
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -265,6 +266,17 @@ function getReadNotifs(): string[] {
   return getStorage(NOTIF_KEY, []);
 }
 
+// ── Deleted users tracking ──
+function getDeletedUserIds(): Set<string> {
+  return new Set(getStorage<string[]>(DELETED_USERS_KEY, []));
+}
+
+function addDeletedUserIds(ids: string[]) {
+  const current = getStorage<string[]>(DELETED_USERS_KEY, []);
+  const updated = [...new Set([...current, ...ids])];
+  setStorage(DELETED_USERS_KEY, updated);
+}
+
 // ── Custom rides ──
 function getCustomRides(): Ride[] {
   return getStorage<Ride[]>(RIDES_KEY, []);
@@ -437,7 +449,9 @@ export const api = {
         addedEmails.add(rider.email.toLowerCase());
       });
 
-      return { users: combined };
+      // Filter out deleted users
+      const deletedIds = getDeletedUserIds();
+      return { users: combined.filter((u) => !deletedIds.has(u.id)) };
     },
     get: async (id: string) => {
       await delay(100);
@@ -446,13 +460,37 @@ export const api = {
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
-      // If role is being updated, persist it
-      if (data.role) {
-        const users = getRegisteredUsers();
-        const user = users.find((u) => u.id === id);
-        if (user) {
-          user.role = data.role as UserRole;
-          saveCustomUsers(users);
+      const users = getRegisteredUsers();
+      const user = users.find((u) => u.id === id);
+      if (user) {
+        // Update all provided fields
+        if (data.role) user.role = data.role as UserRole;
+        if (data.name !== undefined) user.name = String(data.name);
+        if (data.email !== undefined) user.email = String(data.email);
+        if (data.phone !== undefined) user.phone = String(data.phone);
+        saveCustomUsers(users);
+      } else {
+        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // Create a custom record so changes persist.
+        const staticUser = mockAllUsers.find((u) => u.id === id);
+        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const source = staticUser || riderProfile;
+        if (source) {
+          const newUser: StoredUser = {
+            id: source.id,
+            name: data.name !== undefined ? String(data.name) : source.name,
+            email: data.email !== undefined ? String(data.email) : source.email,
+            password: "",
+            phone: data.phone !== undefined ? String(data.phone) : ("phone" in source ? String(source.phone) : ""),
+            city: "",
+            ridingExperience: "",
+            motorcycle: "",
+            role: (data.role as UserRole) || ("role" in source ? (source.role as UserRole) : "rider"),
+            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
+            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+          };
+          const allUsers = [...users, newUser];
+          saveCustomUsers(allUsers);
         }
       }
       return { user: { id, ...data } };
@@ -463,6 +501,8 @@ export const api = {
       const builtinIds = new Set(getBuiltinUsers().map((b) => b.id));
       const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
       saveCustomUsers(custom.filter((u) => u.id !== id));
+      // Track deletion so static/mock users don't reappear
+      addDeletedUserIds([id]);
       return { success: true, id };
     },
     bulkDelete: async (ids: string[]) => {
@@ -471,6 +511,8 @@ export const api = {
       const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
       const idsSet = new Set(ids);
       saveCustomUsers(custom.filter((u) => !idsSet.has(u.id)));
+      // Track deletion so static/mock users don't reappear
+      addDeletedUserIds(ids);
       return { success: true, deletedCount: ids.length };
     },
     approve: async (id: string) => {
