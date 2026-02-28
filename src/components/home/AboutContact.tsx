@@ -47,7 +47,7 @@ export function AboutContact() {
                 icon: Heart,
                 title: "Our Story",
                 description:
-                  "Tales on 2 Wheels began in 2023 when a group of passionate riders in Mumbai decided to formalize their weekend rides. What started as 5 friends exploring coastal roads has grown into a 500+ member community that spans across India.",
+                  "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 152+ member community that has completed 27 rides across India, Nepal, and Thailand.",
               },
               {
                 icon: Target,
@@ -84,29 +84,29 @@ export function AboutContact() {
             <div className="flex flex-wrap items-center justify-center gap-6">
               {[
                 {
-                  name: "Arjun Mehta",
-                  role: "Founder & Lead Rider",
-                  initials: "AM",
+                  name: "Roshan Manuel",
+                  role: "Founder & Lead Organiser",
+                  initials: "RM",
                 },
                 {
-                  name: "Priya Sharma",
-                  role: "Co-Founder & Route Master",
-                  initials: "PS",
+                  name: "Sanjeev Kumar",
+                  role: "Co-Founder & Sweep Rider",
+                  initials: "SK",
                 },
                 {
-                  name: "Vikram Singh",
-                  role: "Head of Safety",
-                  initials: "VS",
+                  name: "Jay Trivedi",
+                  role: "Ride Organiser & Pilot",
+                  initials: "JT",
                 },
                 {
-                  name: "Rahul Desai",
-                  role: "Community Manager",
-                  initials: "RD",
+                  name: "Shreyas BM",
+                  role: "Ride Organiser",
+                  initials: "SB",
                 },
                 {
-                  name: "Kiran Patel",
-                  role: "Content Lead",
-                  initials: "KP",
+                  name: "Harish Mysuru",
+                  role: "Ride Organiser & Accounts",
+                  initials: "HM",
                 },
               ].map((member) => (
                 <div key={member.name} className="group text-center">
@@ -142,25 +142,10 @@ export function AboutContact() {
                   <div>
                     <p className="text-sm text-t2w-muted">Email us</p>
                     <a
-                      href="mailto:ride@talesontwowheels.com"
+                      href="mailto:Info@taleson2wheels.com"
                       className="font-medium text-white hover:text-t2w-accent transition-colors"
                     >
-                      ride@talesontwowheels.com
-                    </a>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-t2w-accent/10">
-                    <Phone className="h-5 w-5 text-t2w-accent" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-t2w-muted">Call us</p>
-                    <a
-                      href="tel:+919876543210"
-                      className="font-medium text-white hover:text-t2w-accent transition-colors"
-                    >
-                      +91 98765 43210
+                      Info@taleson2wheels.com
                     </a>
                   </div>
                 </div>
@@ -171,7 +156,7 @@ export function AboutContact() {
                   </div>
                   <div>
                     <p className="text-sm text-t2w-muted">Headquarters</p>
-                    <p className="font-medium text-white">Mumbai, Maharashtra, India</p>
+                    <p className="font-medium text-white">Bangalore, Karnataka, India</p>
                   </div>
                 </div>
               </div>

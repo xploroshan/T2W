@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 
 const stats = [
-  { label: "Active Riders", value: "500+", icon: Users },
-  { label: "Rides Completed", value: "120+", icon: MapPin },
-  { label: "KMs Covered", value: "2.5L+", icon: Bike },
-  { label: "Badges Earned", value: "850+", icon: Trophy },
+  { label: "Active Riders", value: "152", icon: Users },
+  { label: "Rides Completed", value: "27", icon: MapPin },
+  { label: "KMs Covered", value: "20,575", icon: Bike },
+  { label: "Countries Ridden", value: "3", icon: Trophy },
 ];
 
 export function HeroSection() {
