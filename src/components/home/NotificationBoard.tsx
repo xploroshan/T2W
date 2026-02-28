@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { mockBlogs } from "@/data/mock";
 
 type Notification = {
   id: string;
@@ -198,29 +199,17 @@ export function NotificationBoard() {
             </div>
 
             <div className="space-y-4">
-              {[
-                {
-                  title: "The Art of Cornering: Mastering Twisty Mountain Roads",
-                  author: "Arjun Mehta",
-                  date: "Feb 10, 2026",
-                  tag: "Riding Tips",
-                  readTime: "8 min read",
-                },
-                {
-                  title: "Spiti Diaries: 10 Days Above the Clouds",
-                  author: "Priya Sharma",
-                  date: "Jan 28, 2026",
-                  tag: "Adventure",
-                  readTime: "12 min read",
-                },
-                {
-                  title: "Gear Guide 2026: Essential Riding Equipment",
-                  author: "T2W Team",
-                  date: "Feb 15, 2026",
-                  tag: "Guide",
-                  readTime: "15 min read",
-                },
-              ].map((blog, i) => (
+              {mockBlogs
+                .filter((b) => b.approvalStatus === "approved")
+                .slice(0, 3)
+                .map((blog, i) => ({
+                  title: blog.title,
+                  author: blog.author,
+                  date: new Date(blog.publishDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+                  tag: blog.tags[0] || blog.type,
+                  readTime: `${blog.readTime} min read`,
+                }))
+                .map((blog, i) => (
                 <a
                   key={i}
                   href="/blogs"

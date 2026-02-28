@@ -123,6 +123,12 @@ export function AdminPage() {
   const [pendingBlogs, setPendingBlogs] = useState<PendingBlog[]>([]);
   const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
   const [roleChangeUser, setRoleChangeUser] = useState<string | null>(null);
+  const [rideForm, setRideForm] = useState({
+    title: "", rideNumber: "", type: "day", startDate: "", endDate: "",
+    startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20",
+    fee: "0", difficulty: "easy", description: "",
+  });
+  const [publishingRide, setPublishingRide] = useState(false);
 
   useEffect(() => {
     if (!user || !isCoreOrAbove) return;
@@ -188,6 +194,48 @@ export function AdminPage() {
       setRoleChangeUser(null);
     } catch (err) {
       console.error("Failed to change role:", err);
+    }
+  };
+
+  const publishRide = async () => {
+    if (!canCreateRide || publishingRide) return;
+    setPublishingRide(true);
+    try {
+      const result = await api.rides.create({
+        title: rideForm.title,
+        rideNumber: rideForm.rideNumber,
+        type: rideForm.type,
+        status: "upcoming",
+        startDate: rideForm.startDate,
+        endDate: rideForm.endDate || rideForm.startDate,
+        startLocation: rideForm.startLocation,
+        endLocation: rideForm.endLocation,
+        distanceKm: Number(rideForm.distanceKm) || 0,
+        maxRiders: Number(rideForm.maxRiders) || 20,
+        registeredRiders: 0,
+        fee: Number(rideForm.fee) || 0,
+        difficulty: rideForm.difficulty,
+        description: rideForm.description,
+        route: [rideForm.startLocation, rideForm.endLocation],
+        highlights: [],
+      });
+      const newRide = (result as { ride: AdminRide }).ride;
+      setRides((prev) => [newRide, ...prev]);
+      setShowAddRide(false);
+      setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
+    } catch (err) {
+      console.error("Failed to create ride:", err);
+    } finally {
+      setPublishingRide(false);
+    }
+  };
+
+  const deleteContent = async (id: string) => {
+    try {
+      await api.admin.content.delete(id);
+      setContent((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete content:", err);
     }
   };
 
@@ -510,24 +558,27 @@ export function AdminPage() {
             {showAddRide && canCreateRide && (
               <div className="card mb-8">
                 <h3 className="mb-6 font-display text-lg font-bold text-white">Create New Ride</h3>
-                <form className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" placeholder="e.g., Coastal Sunrise Sprint" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" placeholder="#029" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer"><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" placeholder="Starting point" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" placeholder="Destination" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" placeholder="0" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" placeholder="20" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee</label><input type="number" className="input-field" placeholder="0" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer"><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
-                  <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" placeholder="Describe the ride..." /></div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" placeholder="e.g., Coastal Sunrise Sprint" value={rideForm.title} onChange={(e) => setRideForm({ ...rideForm, title: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" placeholder="#029" value={rideForm.rideNumber} onChange={(e) => setRideForm({ ...rideForm, rideNumber: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer" value={rideForm.type} onChange={(e) => setRideForm({ ...rideForm, type: e.target.value })}><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={rideForm.startDate} onChange={(e) => setRideForm({ ...rideForm, startDate: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={rideForm.endDate} onChange={(e) => setRideForm({ ...rideForm, endDate: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" placeholder="Starting point" value={rideForm.startLocation} onChange={(e) => setRideForm({ ...rideForm, startLocation: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" placeholder="Destination" value={rideForm.endLocation} onChange={(e) => setRideForm({ ...rideForm, endLocation: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" placeholder="0" value={rideForm.distanceKm} onChange={(e) => setRideForm({ ...rideForm, distanceKm: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" placeholder="20" value={rideForm.maxRiders} onChange={(e) => setRideForm({ ...rideForm, maxRiders: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee</label><input type="number" className="input-field" placeholder="0" value={rideForm.fee} onChange={(e) => setRideForm({ ...rideForm, fee: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={rideForm.difficulty} onChange={(e) => setRideForm({ ...rideForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
+                  <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" placeholder="Describe the ride..." value={rideForm.description} onChange={(e) => setRideForm({ ...rideForm, description: e.target.value })} /></div>
                   <div className="sm:col-span-2 flex gap-3">
-                    <button type="button" className="btn-primary">Publish Ride</button>
+                    <button type="button" className="btn-primary flex items-center gap-2" onClick={publishRide} disabled={publishingRide || !rideForm.title || !rideForm.startDate}>
+                      {publishingRide ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      {publishingRide ? "Publishing..." : "Publish Ride"}
+                    </button>
                     <button type="button" className="btn-secondary" onClick={() => setShowAddRide(false)}>Cancel</button>
                   </div>
-                </form>
+                </div>
               </div>
             )}
 
@@ -644,9 +695,6 @@ export function AdminPage() {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-display text-xl font-bold text-white">Copyrighted Content</h3>
-              <button className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
-                <Plus className="h-4 w-4" />Add Content
-              </button>
             </div>
             <div className="space-y-3">
               {content.map((item) => (
@@ -664,9 +712,8 @@ export function AdminPage() {
                     item.status === "published" ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"
                   }`}>{item.status}</span>
                   <div className="flex gap-2">
-                    <button className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white"><Edit3 className="h-3.5 w-3.5" />Edit</button>
-                    {canDeleteRide && (
-                      <button className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+                    {isSuperAdmin && (
+                      <button onClick={() => deleteContent(item.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20"><Trash2 className="h-3.5 w-3.5" />Delete</button>
                     )}
                   </div>
                 </div>

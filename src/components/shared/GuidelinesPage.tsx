@@ -209,23 +209,23 @@ export function GuidelinesPage() {
             {[
               {
                 tip: "Always check your tire pressure before a ride. Under-inflated tires are the #1 cause of poor handling and accidents on long rides.",
-                author: "Arjun Mehta",
-                role: "Founder, 15+ years riding",
+                author: "Roshan Manuel",
+                role: "Founder & Lead Organiser",
               },
               {
                 tip: "In a group, ride your own ride. Don't try to keep up with faster riders. Everyone reaches the destination — speed doesn't matter, safety does.",
-                author: "Priya Sharma",
-                role: "Route Master, 12+ years riding",
+                author: "Jay Trivedi",
+                role: "Ride Organiser & Pilot",
               },
               {
                 tip: "Hydration is key, especially in summer. Dehydration affects concentration and reaction time. Take regular water breaks even if you don't feel thirsty.",
-                author: "Vikram Singh",
-                role: "Head of Safety, 18+ years riding",
+                author: "Sanjeev Kumar",
+                role: "Co-Founder & Sweep Rider",
               },
               {
                 tip: "Learn to read the road surface. Gravel, wet patches, oil spills, and painted lines are all hazards. Train your eyes to spot them early.",
-                author: "Rahul Desai",
-                role: "Community Manager, 10+ years riding",
+                author: "Harish Mysuru",
+                role: "Ride Organiser & Accounts",
               },
             ].map((item, i) => (
               <div key={i} className="card">

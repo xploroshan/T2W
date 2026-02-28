@@ -122,9 +122,11 @@ export function DashboardPage() {
                   .map((n) => n[0])
                   .join("")}
               </div>
-              <button className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-t2w-surface border border-t2w-border text-t2w-muted hover:text-white transition-colors">
-                <Camera className="h-3.5 w-3.5" />
-              </button>
+              {user.linkedRiderId && (
+                <Link href={`/rider?id=${user.linkedRiderId}`} className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-t2w-surface border border-t2w-border text-t2w-muted hover:text-white transition-colors" title="Edit avatar on your rider profile">
+                  <Camera className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
 
             <div className="flex-1">
@@ -160,10 +162,13 @@ export function DashboardPage() {
               </div>
             </div>
 
-            <button className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm">
+            <Link
+              href={user.linkedRiderId ? `/rider?id=${user.linkedRiderId}` : "#"}
+              className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm"
+            >
               <Settings className="h-4 w-4" />
               Edit Profile
-            </button>
+            </Link>
           </div>
         </div>
 

@@ -168,12 +168,14 @@ export function AboutContact() {
                 </p>
                 <div className="flex gap-3">
                   {[
-                    { icon: Instagram, label: "Instagram" },
-                    { icon: Youtube, label: "YouTube" },
-                  ].map(({ icon: Icon, label }) => (
+                    { icon: Instagram, label: "Instagram", href: "https://www.instagram.com/Tales.On.2.Wheels" },
+                    { icon: Youtube, label: "YouTube", href: "https://www.youtube.com/@TalesOn2Wheels" },
+                  ].map(({ icon: Icon, label, href }) => (
                     <a
                       key={label}
-                      href="#"
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-xl border border-t2w-border bg-t2w-surface px-4 py-2.5 text-sm text-t2w-muted transition-all hover:border-t2w-accent/50 hover:text-white"
                     >
                       <Icon className="h-4 w-4" />
