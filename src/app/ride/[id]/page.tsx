@@ -116,6 +116,11 @@ function RideEventSchema({ rideId }: { rideId: string }) {
     performer: ride.leadRider
       ? { "@type": "Person", name: ride.leadRider }
       : undefined,
+    ...(ride.status === "upcoming" && {
+      isAccessibleForFree: ride.fee === 0,
+      typicalAgeRange: "18-",
+      keywords: `motorcycle ride, ${ride.endLocation}, group ride, ${ride.type} ride, T2W`,
+    }),
   };
 
   return (

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { RidesPage } from "@/components/rides/RidesPage";
+import { mockRides } from "@/data/mock";
 
 export const metadata: Metadata = {
   title:
@@ -30,6 +31,60 @@ export const metadata: Metadata = {
   },
 };
 
+function UpcomingRidesSchema() {
+  const upcomingRides = mockRides.filter((r) => r.status === "upcoming");
+  if (upcomingRides.length === 0) return null;
+
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Upcoming Motorcycle Rides - Tales on 2 Wheels",
+    description: "Browse and register for upcoming motorcycle group rides from Bangalore and across India.",
+    numberOfItems: upcomingRides.length,
+    itemListElement: upcomingRides.map((ride, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "Event",
+        name: `${ride.rideNumber} ${ride.title}`,
+        description: ride.description,
+        startDate: ride.startDate,
+        endDate: ride.endDate,
+        eventStatus: "https://schema.org/EventScheduled",
+        eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+        location: {
+          "@type": "Place",
+          name: ride.startLocation,
+          address: { "@type": "PostalAddress", addressLocality: ride.startLocation.split(",")[0].trim(), addressCountry: "IN" },
+        },
+        organizer: { "@type": "Organization", name: "Tales on 2 Wheels", url: "https://taleson2wheels.com" },
+        offers: {
+          "@type": "Offer",
+          price: ride.fee,
+          priceCurrency: "INR",
+          availability: ride.registeredRiders < ride.maxRiders ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+          url: `https://taleson2wheels.com/ride/${ride.id}`,
+        },
+        maximumAttendeeCapacity: ride.maxRiders,
+        remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
+        image: "https://taleson2wheels.com/og-image.jpg",
+      },
+    })),
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
 export default function Rides() {
-  return <RidesPage />;
+  return (
+    <>
+      <UpcomingRidesSchema />
+      <RidesPage />
+    </>
+  );
 }

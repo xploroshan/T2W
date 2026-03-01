@@ -47,6 +47,54 @@ const RIDE_POSTS_KEY = "t2w_ride_posts";
 const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
 const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
+const ACTIVITY_LOG_KEY = "t2w_activity_log";
+
+// ── Activity Log ──
+export type ActivityAction =
+  | "ride_created"
+  | "ride_edited"
+  | "ride_deleted"
+  | "user_approved"
+  | "user_rejected"
+  | "user_deleted"
+  | "user_bulk_deleted"
+  | "user_role_changed"
+  | "blog_approved"
+  | "blog_rejected"
+  | "post_approved"
+  | "post_rejected"
+  | "content_deleted"
+  | "form_settings_saved";
+
+export type ActivityLogEntry = {
+  id: string;
+  action: ActivityAction;
+  performedBy: string;
+  performedByName: string;
+  timestamp: string;
+  targetId: string;
+  targetName: string;
+  details?: string;
+  rollbackData?: unknown;
+};
+
+function getActivityLog(): ActivityLogEntry[] {
+  return getStorage<ActivityLogEntry[]>(ACTIVITY_LOG_KEY, []);
+}
+
+function addActivityLog(
+  entry: Omit<ActivityLogEntry, "id" | "timestamp">
+) {
+  const log = getActivityLog();
+  log.unshift({
+    ...entry,
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: new Date().toISOString(),
+  });
+  // Keep last 200 entries
+  if (log.length > 200) log.length = 200;
+  setStorage(ACTIVITY_LOG_KEY, log);
+}
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -979,6 +1027,91 @@ export const api = {
         await delay(200);
         return { success: true, id };
       },
+    },
+  },
+
+  activityLog: {
+    list: async () => {
+      await delay(50);
+      return { entries: getActivityLog() };
+    },
+    add: (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
+      addActivityLog(entry);
+    },
+    rollback: async (entryId: string) => {
+      await delay(100);
+      const log = getActivityLog();
+      const entry = log.find((e) => e.id === entryId);
+      if (!entry || !entry.rollbackData) {
+        throw new Error("Cannot rollback this action");
+      }
+
+      const data = entry.rollbackData as Record<string, unknown>;
+
+      switch (entry.action) {
+        case "ride_deleted": {
+          // Re-add the deleted ride
+          const custom = getCustomRides();
+          custom.push(data as unknown as Ride);
+          setStorage(RIDES_KEY, custom);
+          break;
+        }
+        case "user_deleted": {
+          // Re-add the deleted user
+          const users = getRegisteredUsers();
+          users.push(data as unknown as StoredUser);
+          saveCustomUsers(users);
+          // Remove from deleted IDs
+          const deletedIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          setStorage(DELETED_USERS_KEY, deletedIds.filter((id) => id !== entry.targetId));
+          break;
+        }
+        case "user_bulk_deleted": {
+          // Re-add all deleted users
+          const bulkUsers = data.users as unknown as StoredUser[];
+          const currentUsers = getRegisteredUsers();
+          currentUsers.push(...bulkUsers);
+          saveCustomUsers(currentUsers);
+          const deletedBulkIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          const restoredIds = new Set(bulkUsers.map((u) => u.id));
+          setStorage(DELETED_USERS_KEY, deletedBulkIds.filter((id) => !restoredIds.has(id)));
+          break;
+        }
+        case "ride_edited": {
+          // Restore original ride data
+          const ridecustom = getCustomRides();
+          const rideIdx = ridecustom.findIndex((r) => r.id === entry.targetId);
+          if (rideIdx !== -1) {
+            ridecustom[rideIdx] = data as unknown as Ride;
+          } else {
+            ridecustom.push(data as unknown as Ride);
+          }
+          setStorage(RIDES_KEY, ridecustom);
+          break;
+        }
+        case "user_role_changed": {
+          // Restore original role
+          const roleUsers = getRegisteredUsers();
+          const roleUser = roleUsers.find((u) => u.id === entry.targetId);
+          if (roleUser) {
+            roleUser.role = data.previousRole as UserRole;
+            saveCustomUsers(roleUsers);
+          }
+          break;
+        }
+        default:
+          throw new Error("Rollback not supported for this action type");
+      }
+
+      // Mark as rolled back in the log
+      const updatedLog = getActivityLog();
+      const idx = updatedLog.findIndex((e) => e.id === entryId);
+      if (idx !== -1) {
+        updatedLog[idx] = { ...updatedLog[idx], rollbackData: undefined, details: (updatedLog[idx].details || "") + " [ROLLED BACK]" };
+        setStorage(ACTIVITY_LOG_KEY, updatedLog);
+      }
+
+      return { success: true };
     },
   },
 

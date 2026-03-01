@@ -31,12 +31,16 @@ import {
   Save,
   ToggleLeft,
   ToggleRight,
+  Clock,
+  RotateCcw,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
+import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals" | "form-settings";
+type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals" | "form-settings" | "activity";
 
 type PendingUser = {
   id: string;
@@ -155,6 +159,18 @@ export function AdminPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "ride" | "user" | "bulk-users";
+    id: string;
+    name: string;
+    data?: unknown;
+  } | null>(null);
+
+  // Activity log state
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [rollingBack, setRollingBack] = useState<string | null>(null);
+
   // Registration form settings (SuperAdmin)
   const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
   const [savingFormSettings, setSavingFormSettings] = useState(false);
@@ -188,6 +204,13 @@ export function AdminPage() {
       })
       .finally(() => setLoading(false));
 
+    // Load activity log
+    if (isSuperAdmin) {
+      api.activityLog.list().then((data) => {
+        setActivityLog(data.entries);
+      });
+    }
+
     // Load form settings
     api.regFormSettings.get().then((s) => {
       if (s && Object.keys(s).length > 0) {
@@ -199,9 +222,18 @@ export function AdminPage() {
 
   const approveUser = async (id: string) => {
     try {
+      const targetUser = pendingUsers.find((u) => u.id === id);
       await api.users.approve(id);
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       if (stats) setStats({ ...stats, pendingUsers: stats.pendingUsers - 1 });
+      api.activityLog.add({
+        action: "user_approved",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: targetUser?.name || id,
+        details: `Approved user "${targetUser?.name || id}"`,
+      });
     } catch (err) {
       console.error("Failed to approve user:", err);
     }
@@ -209,21 +241,50 @@ export function AdminPage() {
 
   const rejectUser = async (id: string) => {
     try {
+      const targetUser = pendingUsers.find((u) => u.id === id);
       await api.users.reject(id);
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       if (stats) setStats({ ...stats, pendingUsers: stats.pendingUsers - 1, totalUsers: stats.totalUsers - 1 });
+      api.activityLog.add({
+        action: "user_rejected",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: targetUser?.name || id,
+        details: `Rejected user "${targetUser?.name || id}"`,
+      });
     } catch (err) {
       console.error("Failed to reject user:", err);
     }
   };
 
-  const deleteRide = async (id: string) => {
-    if (!canDeleteRide) return;
+  const confirmDeleteRide = (ride: AdminRide) => {
+    setDeleteConfirm({ type: "ride", id: ride.id, name: ride.title });
+  };
+
+  const executeDeleteRide = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "ride" || !canDeleteRide) return;
+    const { id, name } = deleteConfirm;
     try {
+      // Fetch full ride data for rollback before deleting
+      const result = await api.rides.get(id);
+      const rideData = (result as { ride: Record<string, unknown> }).ride;
       await api.rides.delete(id);
       setRides((prev) => prev.filter((r) => r.id !== id));
+      api.activityLog.add({
+        action: "ride_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: name,
+        details: `Deleted ride "${name}"`,
+        rollbackData: rideData,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: id, targetName: name, details: `Deleted ride "${name}"`, rollbackData: rideData }, ...prev]);
     } catch (err) {
       console.error("Failed to delete ride:", err);
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -264,6 +325,9 @@ export function AdminPage() {
     if (!editingRideId || savingEdit) return;
     setSavingEdit(true);
     try {
+      // Fetch current ride data for rollback
+      const currentResult = await api.rides.get(editingRideId);
+      const oldRideData = (currentResult as { ride: Record<string, unknown> }).ride;
       await api.rides.update(editingRideId, {
         title: editForm.title,
         rideNumber: editForm.rideNumber,
@@ -291,6 +355,16 @@ export function AdminPage() {
       // Refresh rides list
       const ridesData = await api.rides.list();
       setRides((ridesData as { rides: AdminRide[] }).rides);
+      api.activityLog.add({
+        action: "ride_edited",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: editingRideId,
+        targetName: editForm.title,
+        details: `Edited ride "${editForm.title}"`,
+        rollbackData: oldRideData,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_edited", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: editingRideId, targetName: editForm.title, details: `Edited ride "${editForm.title}"`, rollbackData: oldRideData }, ...prev]);
       setEditingRideId(null);
     } catch (err) {
       console.error("Failed to update ride:", err);
@@ -302,11 +376,23 @@ export function AdminPage() {
   const changeUserRole = async (userId: string, newRole: UserRole) => {
     if (!canManageRoles) return;
     try {
+      const targetUser = allUsers.find((u) => u.id === userId);
+      const previousRole = targetUser?.role || "rider";
       await api.users.changeRole(userId, newRole);
       setAllUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
       setRoleChangeUser(null);
+      api.activityLog.add({
+        action: "user_role_changed",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: userId,
+        targetName: targetUser?.name || userId,
+        details: `Changed role from ${ROLE_LABELS[previousRole] || previousRole} to ${ROLE_LABELS[newRole] || newRole}`,
+        rollbackData: { previousRole },
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_role_changed", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: userId, targetName: targetUser?.name || userId, details: `Changed role from ${ROLE_LABELS[previousRole] || previousRole} to ${ROLE_LABELS[newRole] || newRole}`, rollbackData: { previousRole } }, ...prev]);
     } catch (err) {
       console.error("Failed to change role:", err);
     }
@@ -352,28 +438,66 @@ export function AdminPage() {
     }
   };
 
-  const deleteUser = async (id: string, name: string) => {
-    if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+  const confirmDeleteUser = (id: string, name: string) => {
+    const userData = allUsers.find((u) => u.id === id);
+    setDeleteConfirm({ type: "user", id, name, data: userData });
+  };
+
+  const executeDeleteUser = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "user") return;
+    const { id, name, data } = deleteConfirm;
     try {
       await api.users.delete(id);
       setAllUsers((prev) => prev.filter((u) => u.id !== id));
+      api.activityLog.add({
+        action: "user_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: name,
+        details: `Deleted user "${name}"`,
+        rollbackData: data,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: id, targetName: name, details: `Deleted user "${name}"`, rollbackData: data }, ...prev]);
     } catch (err) {
       console.error("Failed to delete user:", err);
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
-  const deleteNonGmailUsers = async () => {
+  const confirmDeleteNonGmailUsers = () => {
     if (nonGmailUsers.length === 0) return;
-    if (!confirm(`Delete ${nonGmailUsers.length} users with non-Gmail email addresses? Super Admins and Core Members will NOT be deleted. This cannot be undone.`)) return;
+    setDeleteConfirm({
+      type: "bulk-users",
+      id: "bulk",
+      name: `${nonGmailUsers.length} non-Gmail users`,
+      data: nonGmailUsers,
+    });
+  };
+
+  const executeDeleteBulkUsers = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "bulk-users") return;
     setDeletingUsers(true);
     try {
       const ids = nonGmailUsers.map((u) => u.id);
       await api.users.bulkDelete(ids);
       setAllUsers((prev) => prev.filter((u) => !ids.includes(u.id)));
+      api.activityLog.add({
+        action: "user_bulk_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: "bulk",
+        targetName: `${nonGmailUsers.length} non-Gmail users`,
+        details: `Bulk deleted ${nonGmailUsers.length} non-Gmail users`,
+        rollbackData: { users: deleteConfirm.data },
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_bulk_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: "bulk", targetName: `${nonGmailUsers.length} non-Gmail users`, details: `Bulk deleted ${nonGmailUsers.length} non-Gmail users`, rollbackData: { users: deleteConfirm.data } }, ...prev]);
     } catch (err) {
       console.error("Failed to bulk delete users:", err);
     } finally {
       setDeletingUsers(false);
+      setDeleteConfirm(null);
     }
   };
 
@@ -402,6 +526,15 @@ export function AdminPage() {
       const newRide = (result as { ride: AdminRide }).ride;
       setRides((prev) => [newRide, ...prev]);
       setShowAddRide(false);
+      api.activityLog.add({
+        action: "ride_created",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: newRide.id,
+        targetName: rideForm.title,
+        details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})`,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_created", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: newRide.id, targetName: rideForm.title, details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})` }, ...prev]);
       setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
     } catch (err) {
       console.error("Failed to create ride:", err);
@@ -423,6 +556,7 @@ export function AdminPage() {
     setSavingFormSettings(true);
     try {
       await api.regFormSettings.save(formSettings as unknown as Record<string, unknown>);
+      api.activityLog.add({ action: "form_settings_saved", performedBy: user!.id, performedByName: user!.name, targetId: "form-settings", targetName: "Registration Form", details: "Updated registration form settings" });
       alert("Registration form settings saved successfully!");
     } catch {
       alert("Failed to save settings.");
@@ -442,26 +576,34 @@ export function AdminPage() {
 
   const approveBlog = async (id: string) => {
     if (!user) return;
+    const blog = pendingBlogs.find((b) => b.id === id);
     await api.blogs.approve(id, user.id);
     setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+    api.activityLog.add({ action: "blog_approved", performedBy: user.id, performedByName: user.name, targetId: id, targetName: blog?.title || id, details: `Approved blog "${blog?.title || id}"` });
   };
 
   const rejectBlog = async (id: string) => {
     if (!user) return;
+    const blog = pendingBlogs.find((b) => b.id === id);
     await api.blogs.reject(id, user.id);
     setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+    api.activityLog.add({ action: "blog_rejected", performedBy: user.id, performedByName: user.name, targetId: id, targetName: blog?.title || id, details: `Rejected blog "${blog?.title || id}"` });
   };
 
   const approvePost = async (id: string) => {
     if (!user) return;
+    const post = pendingPosts.find((p) => p.id === id);
     await api.ridePosts.approve(id, user.id);
     setPendingPosts((prev) => prev.filter((p) => p.id !== id));
+    api.activityLog.add({ action: "post_approved", performedBy: user.id, performedByName: user.name, targetId: id, targetName: post?.authorName || id, details: `Approved ride post by ${post?.authorName || id}` });
   };
 
   const rejectPost = async (id: string) => {
     if (!user) return;
+    const post = pendingPosts.find((p) => p.id === id);
     await api.ridePosts.reject(id, user.id);
     setPendingPosts((prev) => prev.filter((p) => p.id !== id));
+    api.activityLog.add({ action: "post_rejected", performedBy: user.id, performedByName: user.name, targetId: id, targetName: post?.authorName || id, details: `Rejected ride post by ${post?.authorName || id}` });
   };
 
   if (authLoading) {
@@ -495,6 +637,9 @@ export function AdminPage() {
     { key: "content" as const, label: "Content", icon: Copyright },
     ...(isSuperAdmin
       ? [{ key: "form-settings" as const, label: "Form Settings", icon: Settings }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "activity" as const, label: "Activity", icon: Activity }]
       : []),
   ];
 
@@ -674,7 +819,7 @@ export function AdminPage() {
                   {/* Bulk delete non-Gmail */}
                   {nonGmailUsers.length > 0 && (
                     <button
-                      onClick={deleteNonGmailUsers}
+                      onClick={confirmDeleteNonGmailUsers}
                       disabled={deletingUsers}
                       className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20"
                       title="Delete all users without @gmail.com email (excludes Super Admins and Core Members)"
@@ -781,7 +926,7 @@ export function AdminPage() {
                             )}
                             {u.role !== "superadmin" && (
                               <button
-                                onClick={() => deleteUser(u.id, u.name)}
+                                onClick={() => confirmDeleteUser(u.id, u.name)}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-red-400/10 hover:text-red-400 transition-colors"
                                 title="Delete User"
                               >
@@ -864,7 +1009,7 @@ export function AdminPage() {
                         </button>
                       )}
                       {canDeleteRide && (
-                        <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
+                        <button onClick={() => confirmDeleteRide(ride)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
                           <Trash2 className="h-3.5 w-3.5" />Delete
                         </button>
                       )}
@@ -1156,7 +1301,130 @@ export function AdminPage() {
             )}
           </div>
         )}
+        {/* Activity Tab - Super Admin only */}
+        {activeTab === "activity" && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="card">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-display text-xl font-bold text-white">
+                  <Activity className="h-5 w-5 text-t2w-accent" />
+                  Activity Log
+                </h3>
+                <p className="text-xs text-t2w-muted">{activityLog.length} entries</p>
+              </div>
+              {activityLog.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Clock className="mx-auto h-12 w-12 text-t2w-border" />
+                  <p className="mt-3 text-t2w-muted">No activity logged yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activityLog.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-4 rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        entry.action.includes("deleted") || entry.action.includes("rejected")
+                          ? "bg-red-400/10 text-red-400"
+                          : entry.action.includes("approved") || entry.action.includes("created")
+                          ? "bg-green-400/10 text-green-400"
+                          : entry.action.includes("edited") || entry.action.includes("changed") || entry.action.includes("saved")
+                          ? "bg-blue-400/10 text-blue-400"
+                          : "bg-t2w-accent/10 text-t2w-accent"
+                      }`}>
+                        {entry.action.includes("deleted") ? <Trash2 className="h-4 w-4" /> :
+                         entry.action.includes("approved") ? <CheckCircle className="h-4 w-4" /> :
+                         entry.action.includes("rejected") ? <XCircle className="h-4 w-4" /> :
+                         entry.action.includes("created") ? <Plus className="h-4 w-4" /> :
+                         entry.action.includes("edited") || entry.action.includes("changed") ? <Edit3 className="h-4 w-4" /> :
+                         <Settings className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white">
+                          {entry.details}
+                          {entry.details?.includes("[ROLLED BACK]") && (
+                            <span className="ml-2 rounded bg-yellow-400/10 px-1.5 py-0.5 text-xs text-yellow-400">Rolled Back</span>
+                          )}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-t2w-muted">
+                          <span>by {entry.performedByName}</span>
+                          <span>&middot;</span>
+                          <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {entry.rollbackData !== undefined && entry.rollbackData !== null && !entry.details?.includes("[ROLLED BACK]") && (
+                        <button
+                          onClick={async () => {
+                            if (rollingBack) return;
+                            setRollingBack(entry.id);
+                            try {
+                              await api.activityLog.rollback(entry.id);
+                              const data = await api.activityLog.list();
+                              setActivityLog(data.entries);
+                              // Refresh relevant data
+                              const [usersData, ridesData] = await Promise.all([
+                                api.users.list("status=active").catch(() => null),
+                                api.rides.list().catch(() => null),
+                              ]);
+                              if (usersData) setAllUsers((usersData as { users: AllUser[] }).users);
+                              if (ridesData) setRides((ridesData as { rides: AdminRide[] }).rides);
+                            } catch (err) {
+                              console.error("Rollback failed:", err);
+                            } finally {
+                              setRollingBack(null);
+                            }
+                          }}
+                          disabled={rollingBack === entry.id}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-yellow-400/10 px-3 py-2 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-400/20 disabled:opacity-50"
+                          title="Rollback this action"
+                        >
+                          {rollingBack === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                          Rollback
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-t2w-border bg-t2w-surface p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-400/10">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <h3 className="font-display text-lg font-bold text-white">Confirm Delete</h3>
+            </div>
+            <p className="mb-6 text-sm text-t2w-muted">
+              Are you sure you want to delete <span className="font-semibold text-white">{deleteConfirm.name}</span>?
+              {isSuperAdmin && " You can rollback this action from the Activity tab."}
+              {!isSuperAdmin && " This action cannot be undone."}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-xl border border-t2w-border bg-t2w-surface-light px-4 py-2.5 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteConfirm.type === "ride") executeDeleteRide();
+                  else if (deleteConfirm.type === "user") executeDeleteUser();
+                  else if (deleteConfirm.type === "bulk-users") executeDeleteBulkUsers();
+                }}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,11 +6,12 @@ export const dynamic = "force-static";
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://taleson2wheels.com";
 
+  // Upcoming rides get highest priority for SEO
   const rideUrls = mockRides.map((ride) => ({
     url: `${baseUrl}/ride/${ride.id}`,
-    lastModified: new Date(ride.startDate),
-    changeFrequency: "weekly" as const,
-    priority: 0.8,
+    lastModified: ride.status === "upcoming" ? new Date() : new Date(ride.startDate),
+    changeFrequency: (ride.status === "upcoming" ? "daily" : "monthly") as "daily" | "monthly",
+    priority: ride.status === "upcoming" ? 1.0 : 0.6,
   }));
 
   const blogUrls = mockBlogs.map((blog) => ({
