@@ -151,6 +151,7 @@ export function AdminPage() {
     distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy",
     description: "", leadRider: "", sweepRider: "", meetupTime: "",
     rideStartTime: "", startingPoint: "", organisedBy: "", accountsBy: "",
+    highlights: "",
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -251,6 +252,7 @@ export function AdminPage() {
         startingPoint: String(r.startingPoint || ""),
         organisedBy: String(r.organisedBy || ""),
         accountsBy: String(r.accountsBy || ""),
+        highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
       setEditingRideId(id);
     } catch (err) {
@@ -284,6 +286,7 @@ export function AdminPage() {
         organisedBy: editForm.organisedBy,
         accountsBy: editForm.accountsBy,
         route: [editForm.startLocation, editForm.endLocation],
+        highlights: editForm.highlights.split("\n").map((h) => h.trim()).filter(Boolean),
       });
       // Refresh rides list
       const ridesData = await api.rides.list();
@@ -896,6 +899,17 @@ export function AdminPage() {
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Start Time</label><input type="text" className="input-field" placeholder="e.g. 6:00 AM" value={editForm.rideStartTime} onChange={(e) => setEditForm({ ...editForm, rideStartTime: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Accounts By</label><input type="text" className="input-field" placeholder="Name" value={editForm.accountsBy} onChange={(e) => setEditForm({ ...editForm, accountsBy: e.target.value })} /></div>
                         <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
+                        <div className="sm:col-span-2 lg:col-span-3">
+                          <label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Highlights <span className="text-xs text-t2w-muted">(one per line)</span></label>
+                          <textarea rows={4} className="input-field resize-none" placeholder={"Scenic coastal roads\nBreakfast at local cafe\nSunrise viewpoint stop\nGroup photo at destination"} value={editForm.highlights} onChange={(e) => setEditForm({ ...editForm, highlights: e.target.value })} />
+                          {editForm.highlights.trim() && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {editForm.highlights.split("\n").filter((h) => h.trim()).map((h, i) => (
+                                <span key={i} className="rounded-lg bg-t2w-accent/10 px-2.5 py-1 text-xs text-t2w-accent">{h.trim()}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
                           <button onClick={saveEditRide} disabled={savingEdit} className="btn-primary flex items-center gap-2">
                             {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
