@@ -122,8 +122,8 @@ export function RegisterPage() {
             <div className="h-12 w-12 shrink-0">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <span className="font-display text-2xl font-bold text-white">
-              T2W
+            <span className="text-2xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+              Tales on 2 Wheels
             </span>
           </Link>
           <h1 className="mt-6 font-display text-3xl font-bold text-white">
