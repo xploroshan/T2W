@@ -123,7 +123,7 @@ export function DashboardPage() {
                   .join("")}
               </div>
               {user.linkedRiderId && (
-                <Link href={`/rider?id=${user.linkedRiderId}`} className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-t2w-surface border border-t2w-border text-t2w-muted hover:text-white transition-colors" title="Edit avatar on your rider profile">
+                <Link href={`/rider/${user.linkedRiderId}`} className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-t2w-surface border border-t2w-border text-t2w-muted hover:text-white transition-colors" title="Edit avatar on your rider profile">
                   <Camera className="h-3.5 w-3.5" />
                 </Link>
               )}
@@ -163,7 +163,7 @@ export function DashboardPage() {
             </div>
 
             <Link
-              href={user.linkedRiderId ? `/rider?id=${user.linkedRiderId}` : "#"}
+              href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "#"}
               className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm"
             >
               <Settings className="h-4 w-4" />
@@ -263,7 +263,7 @@ export function DashboardPage() {
                   <h3 className="mb-4 font-display text-lg font-bold text-white">Upcoming Rides</h3>
                   <div className="space-y-3">
                     {upcomingRides.slice(0, 3).map((ride) => (
-                      <Link key={ride.id} href={`/ride?id=${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
+                      <Link key={ride.id} href={`/ride/${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-400/10">
                           <Calendar className="h-5 w-5 text-blue-400" />
                         </div>
@@ -286,7 +286,7 @@ export function DashboardPage() {
                   <h3 className="mb-4 font-display text-lg font-bold text-white">Recent Rides</h3>
                   <div className="space-y-3">
                     {completedRides.slice(0, 3).map((ride) => (
-                      <Link key={ride.id} href={`/ride?id=${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
+                      <Link key={ride.id} href={`/ride/${ride.id}`} className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-3 transition-colors hover:bg-t2w-border/50">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-400/10">
                           <MapPin className="h-5 w-5 text-green-400" />
                         </div>
@@ -314,7 +314,7 @@ export function DashboardPage() {
                 </h3>
                 <div className="space-y-4">
                   {completedRides.map((ride) => (
-                    <Link key={ride.id} href={`/ride?id=${ride.id}`} className="card-interactive flex items-center gap-6">
+                    <Link key={ride.id} href={`/ride/${ride.id}`} className="card-interactive flex items-center gap-6">
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/20">
                         <Gauge className="h-8 w-8 text-t2w-accent" />
                       </div>

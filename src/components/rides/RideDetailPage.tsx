@@ -38,7 +38,7 @@ import type { RidePost } from "@/types";
 function getRiderLink(name: string): string | null {
   if (!name) return null;
   const key = name.toLowerCase().trim();
-  return riderNameToId[key] ? `/rider?id=${riderNameToId[key]}` : null;
+  return riderNameToId[key] ? `/rider/${riderNameToId[key]}` : null;
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -560,7 +560,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     return riderId ? (
                       <Link
                         key={`${riderName}-${index}`}
-                        href={`/rider?id=${riderId}`}
+                        href={`/rider/${riderId}`}
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">

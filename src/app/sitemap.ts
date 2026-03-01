@@ -7,14 +7,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://taleson2wheels.com";
 
   const rideUrls = mockRides.map((ride) => ({
-    url: `${baseUrl}/ride?id=${ride.id}`,
+    url: `${baseUrl}/ride/${ride.id}`,
     lastModified: new Date(ride.startDate),
     changeFrequency: "weekly" as const,
     priority: 0.8,
   }));
 
   const blogUrls = mockBlogs.map((blog) => ({
-    url: `${baseUrl}/blogs#${blog.id}`,
+    url: `${baseUrl}/blog/${blog.id}`,
     lastModified: new Date(blog.publishDate),
     changeFrequency: "monthly" as const,
     priority: 0.7,
@@ -44,12 +44,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/ride`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
     },
     ...rideUrls,
     ...blogUrls,

@@ -544,7 +544,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 .map((ride) => (
                   <Link
                     key={ride.rideId}
-                    href={`/ride?id=${ride.rideId}`}
+                    href={`/ride/${ride.rideId}`}
                     className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4 transition-all hover:bg-t2w-surface-light/80 hover:ring-1 hover:ring-t2w-accent/30"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-t2w-accent/10 font-mono text-sm font-bold text-t2w-accent">
