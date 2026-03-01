@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Menu,
   X,
   User,
   LogIn,
   LogOut,
-  Bike,
   Shield,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -55,9 +55,8 @@ export function Navbar() {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="group flex items-center gap-3">
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent to-red-600 transition-transform duration-300 group-hover:scale-110">
-              <Bike className="h-5 w-5 text-white" />
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-t2w-accent to-red-600 opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-50" />
+            <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
+              <Image src="/logo.png" alt="Tales on 2 Wheels" width={40} height={40} className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-display text-xl font-bold tracking-tight text-white">

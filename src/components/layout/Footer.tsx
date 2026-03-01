@@ -1,6 +1,6 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
-  Bike,
   Mail,
   Phone,
   MapPin,
@@ -44,8 +44,8 @@ export function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="group inline-flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent to-red-600">
-                <Bike className="h-5 w-5 text-white" />
+              <div className="h-10 w-10 shrink-0">
+                <Image src="/logo.png" alt="Tales on 2 Wheels" width={40} height={40} className="h-full w-full object-contain" />
               </div>
               <div>
                 <span className="font-display text-xl font-bold text-white">
