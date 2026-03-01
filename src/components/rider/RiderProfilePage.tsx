@@ -100,10 +100,21 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!rider) return;
     const updates = { ...editForm };
+    // Save to localStorage for rider profile page display
     localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
+    // Also persist to user record so admin panel and account data stay in sync
+    try {
+      await api.users.update(riderId, {
+        name: updates.name,
+        email: updates.email,
+        phone: updates.phone,
+      });
+    } catch {
+      // User record may not exist yet for static rider profiles; localStorage still persists
+    }
     setRider({ ...rider, ...updates });
     setEditing(false);
   };
