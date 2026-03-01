@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import {
   Bike,
   Mail,
@@ -121,7 +120,7 @@ export function RegisterPage() {
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-3">
             <div className="h-12 w-12 shrink-0">
-              <Image src="/logo.png" alt="Tales on 2 Wheels" width={48} height={48} className="h-full w-full object-contain" />
+              <img src="/T2W/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
             <span className="font-display text-2xl font-bold text-white">
               T2W

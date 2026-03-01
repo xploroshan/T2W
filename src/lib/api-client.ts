@@ -537,6 +537,28 @@ export const api = {
       if (user) {
         user.role = newRole;
         saveCustomUsers(users);
+      } else {
+        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // Create a custom record so the role change persists.
+        const staticUser = mockAllUsers.find((u) => u.id === id);
+        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const source = staticUser || riderProfile;
+        if (source) {
+          const newUser: StoredUser = {
+            id: source.id,
+            name: source.name,
+            email: source.email,
+            password: "",
+            phone: "phone" in source ? String(source.phone) : "",
+            city: "",
+            ridingExperience: "",
+            motorcycle: "",
+            role: newRole,
+            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
+            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+          };
+          saveCustomUsers([...users, newUser]);
+        }
       }
       return { success: true, id, role: newRole };
     },
