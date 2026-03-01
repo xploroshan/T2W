@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Bike,
   Mail,
   Phone,
   MapPin,
@@ -28,8 +27,8 @@ const footerLinks = {
   company: [
     { label: "About Us", href: "/#about" },
     { label: "Contact", href: "/#contact" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
+    { label: "Privacy Policy", href: "/guidelines" },
+    { label: "Terms of Service", href: "/guidelines" },
   ],
 };
 
@@ -44,8 +43,8 @@ export function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="group inline-flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent to-red-600">
-                <Bike className="h-5 w-5 text-white" />
+              <div className="h-10 w-10 shrink-0">
+                <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
               </div>
               <div>
                 <span className="font-display text-xl font-bold text-white">
@@ -62,14 +61,16 @@ export function Footer() {
             {/* Social Links */}
             <div className="mt-6 flex items-center gap-3">
               {[
-                { icon: Instagram, href: "#", label: "Instagram" },
-                { icon: Youtube, href: "#", label: "YouTube" },
-                { icon: Facebook, href: "#", label: "Facebook" },
-                { icon: Twitter, href: "#", label: "Twitter" },
+                { icon: Instagram, href: "https://www.instagram.com/Tales.On.2.Wheels", label: "Instagram" },
+                { icon: Youtube, href: "https://www.youtube.com/@TalesOn2Wheels", label: "YouTube" },
+                { icon: Facebook, href: "https://www.facebook.com/TalesOn2Wheels", label: "Facebook" },
+                { icon: Twitter, href: "https://x.com/TalesOn2Wheels", label: "Twitter" },
               ].map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
                   href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={label}
                   className="flex h-10 w-10 items-center justify-center rounded-xl border border-t2w-border bg-t2w-surface text-t2w-muted transition-all duration-200 hover:border-t2w-accent/50 hover:text-t2w-accent"
                 >
@@ -139,18 +140,18 @@ export function Footer() {
             {/* Contact */}
             <div className="mt-8 space-y-2">
               <a
-                href="mailto:ride@talesontwowheels.com"
+                href="mailto:Info@taleson2wheels.com"
                 className="flex items-center gap-2 text-sm text-t2w-muted transition-colors hover:text-white"
               >
                 <Mail className="h-4 w-4" />
-                ride@talesontwowheels.com
+                Info@taleson2wheels.com
               </a>
               <a
-                href="tel:+919876543210"
+                href="tel:+919880141543"
                 className="flex items-center gap-2 text-sm text-t2w-muted transition-colors hover:text-white"
               >
                 <Phone className="h-4 w-4" />
-                +91 98765 43210
+                +91 98801 41543
               </a>
             </div>
           </div>
@@ -163,19 +164,19 @@ export function Footer() {
           </h3>
           <div className="flex flex-wrap gap-2">
             {[
-              "Bangalore to Nandi Hills",
-              "Bangalore to Coorg",
-              "Bangalore to Chikmagalur",
-              "Bangalore to Mysore",
-              "Bangalore to Hampi",
-              "Bangalore to Ooty",
               "Bangalore to Sakleshpur",
+              "Bangalore to Chikmagalur",
+              "Bangalore to BR Hills",
+              "Bangalore to Coorg",
+              "Bangalore to Hampi",
+              "Bangalore to Kabini",
+              "Bangalore to Pondicherry",
+              "Bangalore to Gokarna",
+              "Bangalore to Mangalore",
               "Bangalore to Goa",
-              "Mumbai to Alibaug",
-              "Mumbai to Goa",
-              "Pune to Mahabaleshwar",
-              "Manali to Spiti",
-              "Jaipur to Udaipur",
+              "Manali to Leh (Himalayan)",
+              "Kathmandu to Pokhara (Nepal)",
+              "Bangkok to Chiang Mai (Thailand)",
             ].map((route) => (
               <Link
                 key={route}

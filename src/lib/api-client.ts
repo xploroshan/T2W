@@ -7,8 +7,14 @@ import {
   mockPendingUsers,
   mockAllUsers,
   mockContentItems,
+  mockRidePosts,
 } from "@/data/mock";
-import { Ride, BlogPost, User } from "@/types";
+import {
+  riderProfiles,
+  riderNameToId,
+  type RiderProfile,
+} from "@/data/rider-profiles";
+import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -30,11 +36,19 @@ function setStorage(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-// ── Auth ──
+// ── Storage keys ──
 const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
+const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
+const RIDE_REG_KEY = "t2w_ride_registrations";
+const NOTIF_KEY = "t2w_notif_read";
+const BLOGS_KEY = "t2w_blogs";
+const RIDE_POSTS_KEY = "t2w_ride_posts";
+const RIDES_KEY = "t2w_custom_rides";
+const DELETED_USERS_KEY = "t2w_deleted_users";
 
-function getRegisteredUsers(): Array<{
+// ── Registered user type (stored in localStorage) ──
+interface StoredUser {
   id: string;
   name: string;
   email: string;
@@ -43,57 +57,145 @@ function getRegisteredUsers(): Array<{
   city: string;
   ridingExperience: string;
   motorcycle: string;
-  role: string;
+  role: UserRole;
   joinDate: string;
   isApproved: boolean;
-}> {
-  return getStorage(USERS_KEY, [
-    {
-      id: "user-1",
-      name: "Rohan Kapoor",
-      email: "rohan@example.com",
-      password: "password123",
-      phone: "+91 98765 43210",
-      city: "Mumbai",
-      ridingExperience: "veteran",
-      motorcycle: "Royal Enfield Himalayan 450",
-      role: "rider",
-      joinDate: "2024-06-15",
-      isApproved: true,
-    },
-    {
-      id: "admin-1",
-      name: "Arjun Mehta",
-      email: "admin@t2w.com",
-      password: "admin123",
-      phone: "+91 98765 00001",
-      city: "Mumbai",
-      ridingExperience: "veteran",
-      motorcycle: "BMW R 1250 GS",
-      role: "admin",
-      joinDate: "2023-01-01",
-      isApproved: true,
-    },
-  ]);
+  linkedRiderId?: string;
 }
 
-function buildUserData(dbUser: ReturnType<typeof getRegisteredUsers>[0]): {
+// ── Find rider profile by email match ──
+function findRiderByEmail(email: string): RiderProfile | undefined {
+  const lowerEmail = email.toLowerCase().trim();
+  return riderProfiles.find((r) => r.email.toLowerCase().trim() === lowerEmail);
+}
+
+// ── Determine role based on rider participation ──
+function determineRoleForRider(rider: RiderProfile | undefined): UserRole {
+  if (rider && rider.ridesCompleted > 0) return "t2w_rider";
+  return "rider";
+}
+
+// ── Built-in seed users (super admins + core members) ──
+function getBuiltinUsers(): StoredUser[] {
+  return [
+    {
+      id: "admin-1",
+      name: "Roshan Manuel",
+      email: "roshan.manuel@gmail.com",
+      password: "admin123",
+      phone: "+91 9880141543",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "superadmin",
+      joinDate: "2024-03-16",
+      isApproved: true,
+      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
+    },
+    {
+      id: "admin-6",
+      name: "T2W Official",
+      email: "taleson2wheels.official@gmail.com",
+      password: "admin123",
+      phone: "",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "superadmin",
+      joinDate: "2024-03-16",
+      isApproved: true,
+    },
+    {
+      id: "admin-2",
+      name: "Sanjeev Kumar",
+      email: "san.nh007@gmail.com",
+      password: "core123",
+      phone: "",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "core_member",
+      joinDate: "2024-03-16",
+      isApproved: true,
+      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "san.nh007@gmail.com")?.id,
+    },
+    {
+      id: "admin-3",
+      name: "Jay Trivedi",
+      email: "jaytrivedi.b@gmail.com",
+      password: "core123",
+      phone: "9986160300",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "core_member",
+      joinDate: "2024-03-16",
+      isApproved: true,
+      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "jaytrivedi.b@gmail.com")?.id,
+    },
+    {
+      id: "admin-4",
+      name: "Shreyas BM",
+      email: "shreyasbm77@gmail.com",
+      password: "core123",
+      phone: "",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "core_member",
+      joinDate: "2024-03-16",
+      isApproved: true,
+      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "shreyasbm77@gmail.com")?.id,
+    },
+    {
+      id: "admin-5",
+      name: "Harish Mysuru",
+      email: "harishkumarmr27@gmail.com",
+      password: "core123",
+      phone: "",
+      city: "Bangalore",
+      ridingExperience: "veteran",
+      motorcycle: "",
+      role: "core_member",
+      joinDate: "2024-03-16",
+      isApproved: true,
+      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "harishkumarmr27@gmail.com")?.id,
+    },
+  ];
+}
+
+function getRegisteredUsers(): StoredUser[] {
+  const stored = getStorage<StoredUser[]>(USERS_KEY, []);
+  // Merge: built-in users take precedence for their emails
+  const builtinUsers = getBuiltinUsers();
+  const builtinEmails = new Set(builtinUsers.map((u) => u.email.toLowerCase()));
+  const customUsers = stored.filter(
+    (u) => !builtinEmails.has(u.email.toLowerCase())
+  );
+  return [...builtinUsers, ...customUsers];
+}
+
+function saveCustomUsers(users: StoredUser[]) {
+  const builtinEmails = new Set(
+    getBuiltinUsers().map((u) => u.email.toLowerCase())
+  );
+  const toSave = users.filter(
+    (u) => !builtinEmails.has(u.email.toLowerCase())
+  );
+  setStorage(USERS_KEY, toSave);
+}
+
+function buildUserData(dbUser: StoredUser): {
   user: Record<string, unknown>;
 } {
-  if (dbUser.id === "user-1") {
-    return {
-      user: {
-        ...mockCurrentUser,
-        city: dbUser.city,
-        ridingExperience: dbUser.ridingExperience,
-        earnedBadges: mockCurrentUser.badges.map((b, i) => ({
-          id: `ub-${i}`,
-          earnedDate: b.earnedDate || "2025-01-01",
-          badge: b,
-        })),
-      },
-    };
-  }
+  // Find linked rider profile
+  const linkedRider = dbUser.linkedRiderId
+    ? riderProfiles.find((r) => r.id === dbUser.linkedRiderId)
+    : findRiderByEmail(dbUser.email);
+
+  const ridesCompleted = linkedRider?.ridesCompleted || 0;
+  const totalKm = linkedRider?.totalKm || 0;
+
   return {
     user: {
       id: dbUser.id,
@@ -105,49 +207,27 @@ function buildUserData(dbUser: ReturnType<typeof getRegisteredUsers>[0]): {
       isApproved: dbUser.isApproved,
       city: dbUser.city,
       ridingExperience: dbUser.ridingExperience,
-      totalKm: dbUser.role === "admin" ? 25000 : 0,
-      ridesCompleted: dbUser.role === "admin" ? 35 : 0,
+      totalKm,
+      ridesCompleted,
+      linkedRiderId: linkedRider?.id || dbUser.linkedRiderId || null,
       motorcycles:
-        dbUser.role === "admin"
-          ? [
-              {
-                id: "moto-admin-1",
-                make: "BMW",
-                model: "R 1250 GS",
-                year: 2024,
-                cc: 1254,
-                color: "Triple Black",
-                nickname: "Beast",
-              },
-            ]
+        dbUser.role === "superadmin" || dbUser.role === "core_member"
+          ? []
           : [],
       earnedBadges:
-        dbUser.role === "admin"
+        dbUser.role === "superadmin"
           ? [
               {
-                id: "ub-a1",
-                earnedDate: "2023-06-01",
+                id: "ub-conqueror",
+                earnedDate: dbUser.joinDate,
                 badge: {
-                  id: "b-gold",
-                  tier: "GOLD",
-                  name: "Gold Rider",
-                  description: "Completed 5,000 km with T2W",
-                  minKm: 5000,
-                  icon: "award",
-                  color: "#FFD700",
-                },
-              },
-              {
-                id: "ub-a2",
-                earnedDate: "2024-03-15",
-                badge: {
-                  id: "b-plat",
-                  tier: "PLATINUM",
-                  name: "Platinum Rider",
-                  description: "Completed 15,000 km with T2W",
-                  minKm: 15000,
-                  icon: "star",
-                  color: "#E5E4E2",
+                  id: "b-conqueror",
+                  tier: "CONQUEROR",
+                  name: "Conqueror",
+                  description: "Founding member and ride organiser",
+                  minKm: 20000,
+                  icon: "crown",
+                  color: "#FF6B35",
                 },
               },
             ]
@@ -156,41 +236,127 @@ function buildUserData(dbUser: ReturnType<typeof getRegisteredUsers>[0]): {
   };
 }
 
-// ── Ride registrations ──
-const RIDE_REG_KEY = "t2w_ride_registrations";
+// ── Blogs with localStorage persistence ──
+function getBlogs(): BlogPost[] {
+  const custom = getStorage<BlogPost[]>(BLOGS_KEY, []);
+  return [...mockBlogs, ...custom];
+}
 
-function getRideRegistrations(): Record<string, string[]> {
+function saveCustomBlogs(blogs: BlogPost[]) {
+  // Only save non-mock blogs
+  const mockIds = new Set(mockBlogs.map((b) => b.id));
+  setStorage(
+    BLOGS_KEY,
+    blogs.filter((b) => !mockIds.has(b.id))
+  );
+}
+
+// ── Ride posts with localStorage persistence ──
+function getRidePosts(): RidePost[] {
+  return getStorage<RidePost[]>(RIDE_POSTS_KEY, mockRidePosts);
+}
+
+// ── Ride registrations ──
+function getRideRegistrations(): Record<string, RideRegistration[]> {
   return getStorage(RIDE_REG_KEY, {});
 }
 
 // ── Notification state ──
-const NOTIF_KEY = "t2w_notif_read";
-
 function getReadNotifs(): string[] {
   return getStorage(NOTIF_KEY, []);
 }
 
-// ── API object (same interface as before, but local) ──
+// ── Deleted users tracking ──
+function getDeletedUserIds(): Set<string> {
+  return new Set(getStorage<string[]>(DELETED_USERS_KEY, []));
+}
+
+function addDeletedUserIds(ids: string[]) {
+  const current = getStorage<string[]>(DELETED_USERS_KEY, []);
+  const updated = [...new Set([...current, ...ids])];
+  setStorage(DELETED_USERS_KEY, updated);
+}
+
+// ── Custom rides ──
+function getCustomRides(): Ride[] {
+  return getStorage<Ride[]>(RIDES_KEY, []);
+}
+
+function getAllRides(): Ride[] {
+  return [...mockRides, ...getCustomRides()];
+}
+
+// ── API object ──
 export const api = {
   auth: {
     login: async (email: string, password: string) => {
       await delay(300);
       const users = getRegisteredUsers();
-      const found = users.find(
-        (u) => u.email === email && u.password === password
-      );
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => {
+        if (u.email.toLowerCase() !== emailLower) return false;
+        // Check password overrides first (set via forgot password)
+        const override = overrides[emailLower];
+        if (override) return password === override;
+        // Fallback to stored password
+        return u.password === password;
+      });
       if (!found) throw new Error("Invalid email or password");
       setStorage(AUTH_KEY, found.id);
       return buildUserData(found);
     },
 
+    // Social / email-only login (Google, Facebook simulation)
+    loginByEmail: async (email: string) => {
+      await delay(300);
+      const users = getRegisteredUsers();
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => u.email.toLowerCase() === emailLower);
+      if (!found) throw new Error("NO_ACCOUNT");
+      setStorage(AUTH_KEY, found.id);
+      return buildUserData(found);
+    },
+
+    // Forgot password - generates a temp password and returns it
+    resetPassword: async (email: string) => {
+      await delay(400);
+      const users = getRegisteredUsers();
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => u.email.toLowerCase() === emailLower);
+      if (!found) throw new Error("No account found with this email");
+      // Generate a random temporary password
+      const tempPassword = "T2W" + Math.random().toString(36).substring(2, 8);
+      // Store as override
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = tempPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      return { success: true, tempPassword };
+    },
+
+    // Change password (after reset or voluntarily)
+    changePassword: async (email: string, newPassword: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = newPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      return { success: true };
+    },
+
     register: async (data: Record<string, unknown>) => {
       await delay(400);
       const users = getRegisteredUsers();
-      if (users.find((u) => u.email === data.email)) {
+      const email = String(data.email || "").toLowerCase().trim();
+      if (users.find((u) => u.email.toLowerCase() === email)) {
         throw new Error("An account with this email already exists");
       }
-      const newUser = {
+
+      // Check if this email matches an existing rider profile
+      const matchedRider = findRiderByEmail(email);
+      const role = determineRoleForRider(matchedRider);
+
+      const newUser: StoredUser = {
         id: `user-${Date.now()}`,
         name: String(data.name || ""),
         email: String(data.email || ""),
@@ -199,12 +365,13 @@ export const api = {
         city: String(data.city || ""),
         ridingExperience: String(data.ridingExperience || ""),
         motorcycle: String(data.motorcycle || ""),
-        role: "rider",
+        role,
         joinDate: new Date().toISOString().split("T")[0],
-        isApproved: false,
+        isApproved: role === "t2w_rider", // T2W riders auto-approved; regular riders need approval
+        linkedRiderId: matchedRider?.id,
       };
-      users.push(newUser);
-      setStorage(USERS_KEY, users);
+      const allUsers = [...users, newUser];
+      saveCustomUsers(allUsers);
       setStorage(AUTH_KEY, newUser.id);
       return buildUserData(newUser);
     },
@@ -232,7 +399,59 @@ export const api = {
       if (params?.includes("pending")) {
         return { users: mockPendingUsers };
       }
-      return { users: mockAllUsers };
+      // Start with registered users (built-in + localStorage signups)
+      const registeredUsers = getRegisteredUsers();
+      const combined: Array<{
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        isApproved: boolean;
+        joinDate: string;
+      }> = [];
+
+      // 1. Add all mockAllUsers, merging role from registeredUsers
+      const addedEmails = new Set<string>();
+      mockAllUsers.forEach((u) => {
+        const reg = registeredUsers.find(
+          (r) => r.email.toLowerCase() === u.email.toLowerCase()
+        );
+        combined.push(reg ? { ...u, role: reg.role } : u);
+        addedEmails.add(u.email.toLowerCase());
+      });
+
+      // 2. Add registered users not already in the list
+      registeredUsers
+        .filter((r) => !addedEmails.has(r.email.toLowerCase()))
+        .forEach((r) => {
+          combined.push({
+            id: r.id,
+            name: r.name,
+            email: r.email,
+            role: r.role,
+            isApproved: r.isApproved,
+            joinDate: r.joinDate,
+          });
+          addedEmails.add(r.email.toLowerCase());
+        });
+
+      // 3. Add all rider profiles from past rides (as t2w_rider)
+      riderProfiles.forEach((rider) => {
+        if (addedEmails.has(rider.email.toLowerCase())) return;
+        combined.push({
+          id: rider.id,
+          name: rider.name,
+          email: rider.email,
+          role: rider.ridesCompleted > 0 ? "t2w_rider" : "rider",
+          isApproved: true,
+          joinDate: rider.joinDate || "2024-03-16",
+        });
+        addedEmails.add(rider.email.toLowerCase());
+      });
+
+      // Filter out deleted users
+      const deletedIds = getDeletedUserIds();
+      return { users: combined.filter((u) => !deletedIds.has(u.id)) };
     },
     get: async (id: string) => {
       await delay(100);
@@ -241,36 +460,135 @@ export const api = {
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
+      const users = getRegisteredUsers();
+      const user = users.find((u) => u.id === id);
+      if (user) {
+        // Update all provided fields
+        if (data.role) user.role = data.role as UserRole;
+        if (data.name !== undefined) user.name = String(data.name);
+        if (data.email !== undefined) user.email = String(data.email);
+        if (data.phone !== undefined) user.phone = String(data.phone);
+        saveCustomUsers(users);
+      } else {
+        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // Create a custom record so changes persist.
+        const staticUser = mockAllUsers.find((u) => u.id === id);
+        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const source = staticUser || riderProfile;
+        if (source) {
+          const newUser: StoredUser = {
+            id: source.id,
+            name: data.name !== undefined ? String(data.name) : source.name,
+            email: data.email !== undefined ? String(data.email) : source.email,
+            password: "",
+            phone: data.phone !== undefined ? String(data.phone) : ("phone" in source ? String(source.phone) : ""),
+            city: "",
+            ridingExperience: "",
+            motorcycle: "",
+            role: (data.role as UserRole) || ("role" in source ? (source.role as UserRole) : "rider"),
+            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
+            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+          };
+          const allUsers = [...users, newUser];
+          saveCustomUsers(allUsers);
+        }
+      }
       return { user: { id, ...data } };
     },
     delete: async (id: string) => {
       await delay(200);
+      // Remove from custom users in localStorage
+      const builtinIds = new Set(getBuiltinUsers().map((b) => b.id));
+      const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
+      saveCustomUsers(custom.filter((u) => u.id !== id));
+      // Track deletion so static/mock users don't reappear
+      addDeletedUserIds([id]);
       return { success: true, id };
+    },
+    bulkDelete: async (ids: string[]) => {
+      await delay(300);
+      const builtinIds = new Set(getBuiltinUsers().map((b) => b.id));
+      const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
+      const idsSet = new Set(ids);
+      saveCustomUsers(custom.filter((u) => !idsSet.has(u.id)));
+      // Track deletion so static/mock users don't reappear
+      addDeletedUserIds(ids);
+      return { success: true, deletedCount: ids.length };
     },
     approve: async (id: string) => {
       await delay(200);
+      const users = getRegisteredUsers();
+      const user = users.find((u) => u.id === id);
+      if (user) {
+        user.isApproved = true;
+        saveCustomUsers(users);
+      }
       return { success: true, id };
     },
     reject: async (id: string) => {
       await delay(200);
       return { success: true, id };
     },
+    // Change role (SuperAdmin only)
+    changeRole: async (id: string, newRole: UserRole) => {
+      await delay(200);
+      const users = getRegisteredUsers();
+      const user = users.find((u) => u.id === id);
+      if (user) {
+        user.role = newRole;
+        saveCustomUsers(users);
+      } else {
+        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // Create a custom record so the role change persists.
+        const staticUser = mockAllUsers.find((u) => u.id === id);
+        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const source = staticUser || riderProfile;
+        if (source) {
+          const newUser: StoredUser = {
+            id: source.id,
+            name: source.name,
+            email: source.email,
+            password: "",
+            phone: "phone" in source ? String(source.phone) : "",
+            city: "",
+            ridingExperience: "",
+            motorcycle: "",
+            role: newRole,
+            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
+            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+          };
+          saveCustomUsers([...users, newUser]);
+        }
+      }
+      return { success: true, id, role: newRole };
+    },
   },
 
   rides: {
     list: async () => {
       await delay(200);
-      return { rides: mockRides };
+      return { rides: getAllRides() };
     },
     get: async (id: string) => {
       await delay(150);
-      const ride = mockRides.find((r) => r.id === id);
+      const ride = getAllRides().find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
-      return { ride: { ...ride, registrations: [] } };
+      const regs = getRideRegistrations();
+      return {
+        ride: {
+          ...ride,
+          registrations: regs[id] || [],
+          riders: ride.riders || [],
+        },
+      };
     },
     create: async (data: Record<string, unknown>) => {
       await delay(300);
-      return { ride: { id: `ride-${Date.now()}`, ...data } };
+      const newRide = { id: `ride-${Date.now()}`, ...data } as Ride;
+      const custom = getCustomRides();
+      custom.push(newRide);
+      setStorage(RIDES_KEY, custom);
+      return { ride: newRide };
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
@@ -278,6 +596,11 @@ export const api = {
     },
     delete: async (id: string) => {
       await delay(200);
+      const custom = getCustomRides();
+      setStorage(
+        RIDES_KEY,
+        custom.filter((r) => r.id !== id)
+      );
       return { success: true, id };
     },
     register: async (id: string, data?: Record<string, unknown>) => {
@@ -286,13 +609,37 @@ export const api = {
       const userId =
         getStorage<string | null>(AUTH_KEY, null) || "anonymous";
       if (!regs[id]) regs[id] = [];
-      if (regs[id].includes(userId)) {
+
+      // Check if already registered
+      const existingReg = regs[id].find(
+        (r: RideRegistration) => r.userId === userId
+      );
+      if (existingReg) {
         throw new Error("You are already registered for this ride");
       }
-      regs[id].push(userId);
+
+      const code = `T2W-${id.toUpperCase().slice(0, 10)}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+      const registration: RideRegistration = {
+        id: `reg-${Date.now()}`,
+        rideId: id,
+        userId,
+        riderName: String(data?.riderName || ""),
+        email: String(data?.email || ""),
+        phone: String(data?.phone || ""),
+        emergencyContactName: String(data?.emergencyContactName || ""),
+        emergencyContactPhone: String(data?.emergencyContactPhone || ""),
+        bloodGroup: String(data?.bloodGroup || ""),
+        vehicleModel: String(data?.vehicleModel || ""),
+        vehicleRegNumber: String(data?.vehicleRegNumber || ""),
+        agreedIndemnity: Boolean(data?.agreedIndemnity),
+        registeredAt: new Date().toISOString(),
+        confirmationCode: code,
+      };
+
+      regs[id].push(registration as unknown as RideRegistration);
       setStorage(RIDE_REG_KEY, regs);
-      const code = `T2W-${id.toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      return { registration: { userId, rideId: id }, confirmationCode: code };
+      return { registration, confirmationCode: code };
     },
     unregister: async (id: string) => {
       await delay(200);
@@ -300,19 +647,99 @@ export const api = {
     },
   },
 
-  blogs: {
-    list: async (_params?: string) => {
+  riders: {
+    list: async () => {
       await delay(150);
-      return { blogs: mockBlogs };
+      return { riders: riderProfiles };
     },
     get: async (id: string) => {
       await delay(100);
-      const blog = mockBlogs.find((b) => b.id === id);
+      const rider = riderProfiles.find((r) => r.id === id);
+      if (!rider) throw new Error("Rider not found");
+      return { rider };
+    },
+    getByName: async (name: string) => {
+      await delay(50);
+      const key = name.toLowerCase().trim();
+      const id = riderNameToId[key];
+      if (id) {
+        const rider = riderProfiles.find((r) => r.id === id);
+        return { rider: rider || null, riderId: id };
+      }
+      return { rider: null, riderId: null };
+    },
+  },
+
+  blogs: {
+    list: async (_params?: string) => {
+      await delay(150);
+      const allBlogs = getBlogs();
+      return { blogs: allBlogs };
+    },
+    listApproved: async () => {
+      await delay(150);
+      const allBlogs = getBlogs();
+      return {
+        blogs: allBlogs.filter((b) => b.approvalStatus === "approved"),
+      };
+    },
+    listPending: async () => {
+      await delay(150);
+      const allBlogs = getBlogs();
+      return {
+        blogs: allBlogs.filter((b) => b.approvalStatus === "pending"),
+      };
+    },
+    get: async (id: string) => {
+      await delay(100);
+      const blog = getBlogs().find((b) => b.id === id);
       return { blog: blog || null };
     },
     create: async (data: Record<string, unknown>) => {
       await delay(300);
-      return { blog: { id: `blog-${Date.now()}`, ...data } };
+      const newBlog: BlogPost = {
+        id: `blog-${Date.now()}`,
+        title: String(data.title || ""),
+        excerpt: String(data.excerpt || ""),
+        content: String(data.content || ""),
+        author: String(data.author || ""),
+        authorId: String(data.authorId || ""),
+        publishDate: new Date().toISOString().split("T")[0],
+        tags: (data.tags as string[]) || [],
+        type: (data.type as "official" | "personal") || "personal",
+        isVlog: Boolean(data.isVlog),
+        videoUrl: data.videoUrl as string | undefined,
+        readTime: Number(data.readTime) || 5,
+        likes: 0,
+        approvalStatus: (data.approvalStatus as BlogApprovalStatus) || "pending",
+        approvedBy: data.approvedBy as string | undefined,
+      };
+      const allBlogs = getBlogs();
+      allBlogs.push(newBlog);
+      saveCustomBlogs(allBlogs);
+      return { blog: newBlog };
+    },
+    approve: async (id: string, approvedBy: string) => {
+      await delay(200);
+      const allBlogs = getBlogs();
+      const blog = allBlogs.find((b) => b.id === id);
+      if (blog) {
+        blog.approvalStatus = "approved";
+        blog.approvedBy = approvedBy;
+        saveCustomBlogs(allBlogs);
+      }
+      return { success: true, id };
+    },
+    reject: async (id: string, rejectedBy: string) => {
+      await delay(200);
+      const allBlogs = getBlogs();
+      const blog = allBlogs.find((b) => b.id === id);
+      if (blog) {
+        blog.approvalStatus = "rejected";
+        blog.approvedBy = rejectedBy;
+        saveCustomBlogs(allBlogs);
+      }
+      return { success: true, id };
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
@@ -320,6 +747,70 @@ export const api = {
     },
     delete: async (id: string) => {
       await delay(200);
+      const allBlogs = getBlogs();
+      saveCustomBlogs(allBlogs.filter((b) => b.id !== id));
+      return { success: true, id };
+    },
+  },
+
+  ridePosts: {
+    list: async (rideId: string) => {
+      await delay(100);
+      const posts = getRidePosts();
+      return { posts: posts.filter((p) => p.rideId === rideId) };
+    },
+    listApproved: async (rideId: string) => {
+      await delay(100);
+      const posts = getRidePosts();
+      return {
+        posts: posts.filter(
+          (p) => p.rideId === rideId && p.approvalStatus === "approved"
+        ),
+      };
+    },
+    listPending: async () => {
+      await delay(100);
+      const posts = getRidePosts();
+      return { posts: posts.filter((p) => p.approvalStatus === "pending") };
+    },
+    create: async (data: Record<string, unknown>) => {
+      await delay(300);
+      const newPost: RidePost = {
+        id: `ridepost-${Date.now()}`,
+        rideId: String(data.rideId || ""),
+        authorId: String(data.authorId || ""),
+        authorName: String(data.authorName || ""),
+        content: String(data.content || ""),
+        images: (data.images as string[]) || [],
+        createdAt: new Date().toISOString(),
+        approvalStatus: (data.approvalStatus as BlogApprovalStatus) || "pending",
+        approvedBy: data.approvedBy as string | undefined,
+      };
+      const posts = getRidePosts();
+      posts.push(newPost);
+      setStorage(RIDE_POSTS_KEY, posts);
+      return { post: newPost };
+    },
+    approve: async (id: string, approvedBy: string) => {
+      await delay(200);
+      const posts = getRidePosts();
+      const post = posts.find((p) => p.id === id);
+      if (post) {
+        post.approvalStatus = "approved";
+        post.approvedBy = approvedBy;
+        setStorage(RIDE_POSTS_KEY, posts);
+      }
+      return { success: true, id };
+    },
+    reject: async (id: string, rejectedBy: string) => {
+      await delay(200);
+      const posts = getRidePosts();
+      const post = posts.find((p) => p.id === id);
+      if (post) {
+        post.approvalStatus = "rejected";
+        post.approvedBy = rejectedBy;
+        setStorage(RIDE_POSTS_KEY, posts);
+      }
       return { success: true, id };
     },
   },
@@ -378,8 +869,9 @@ export const api = {
   dashboard: {
     stats: async () => {
       await delay(200);
+      const allRides = getAllRides();
       return {
-        completedRides: mockRides
+        completedRides: allRides
           .filter((r) => r.status === "completed")
           .map((r) => ({
             id: r.id,
@@ -391,7 +883,7 @@ export const api = {
             distanceKm: r.distanceKm,
             status: r.status,
           })),
-        upcomingRides: mockRides
+        upcomingRides: allRides
           .filter((r) => r.status === "upcoming")
           .map((r) => ({
             id: r.id,
@@ -410,12 +902,25 @@ export const api = {
   admin: {
     stats: async () => {
       await delay(200);
+      const allRides = getAllRides();
+      const pendingBlogs = getBlogs().filter(
+        (b) => b.approvalStatus === "pending"
+      );
+      const pendingPosts = getRidePosts().filter(
+        (p) => p.approvalStatus === "pending"
+      );
       return {
         stats: {
-          totalUsers: mockAllUsers.length + 3,
+          totalUsers: new Set([
+            ...mockAllUsers.map((u) => u.email.toLowerCase()),
+            ...getRegisteredUsers().map((u) => u.email.toLowerCase()),
+            ...riderProfiles.map((r) => r.email.toLowerCase()),
+          ]).size,
           pendingUsers: mockPendingUsers.length,
-          activeRides: mockRides.filter((r) => r.status === "upcoming").length,
+          activeRides: allRides.filter((r) => r.status === "upcoming").length,
           totalContent: mockContentItems.length,
+          pendingBlogs: pendingBlogs.length,
+          pendingPosts: pendingPosts.length,
         },
       };
     },

@@ -9,7 +9,6 @@ import {
   User,
   LogIn,
   LogOut,
-  Bike,
   Shield,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -55,9 +54,8 @@ export function Navbar() {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="group flex items-center gap-3">
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent to-red-600 transition-transform duration-300 group-hover:scale-110">
-              <Bike className="h-5 w-5 text-white" />
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-t2w-accent to-red-600 opacity-0 blur-lg transition-opacity duration-300 group-hover:opacity-50" />
+            <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
+              <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-display text-xl font-bold tracking-tight text-white">
@@ -98,7 +96,7 @@ export function Navbar() {
                 )}
               </Link>
             )}
-            {user && (user.role === "admin" || user.role === "superadmin") && (
+            {user && (user.role === "superadmin" || user.role === "core_member") && (
               <Link
                 href="/admin"
                 className="relative rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
@@ -188,7 +186,7 @@ export function Navbar() {
                   My Space
                 </Link>
               )}
-              {user && (user.role === "admin" || user.role === "superadmin") && (
+              {user && (user.role === "superadmin" || user.role === "core_member") && (
                 <Link
                   href="/admin"
                   onClick={() => setIsOpen(false)}
