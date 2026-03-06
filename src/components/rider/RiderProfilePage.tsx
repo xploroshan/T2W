@@ -27,9 +27,13 @@ import { useAuth } from "@/context/AuthContext";
 import type { RiderProfile } from "@/data/rider-profiles";
 
 export function RiderProfilePage({ riderId }: { riderId: string }) {
-  const { user, canEditProfile, isSuperAdmin, isCoreOrAbove } = useAuth();
-  // Only Core Members and Super Admins can see personal info (email, phone, address)
-  const canViewPersonalInfo = isCoreOrAbove || (user?.linkedRiderId === riderId);
+  const { user, canEditProfile, isSuperAdmin } = useAuth();
+  const isOwnProfile = user?.linkedRiderId === riderId;
+  // Super admin or own profile can see all personal info (email, phone, address, emergency)
+  const canViewAllPersonalInfo = isSuperAdmin || isOwnProfile;
+  // Riders sharing a ride can see phone + emergency contact only
+  const [sharesRide, setSharesRide] = useState(false);
+  const canViewEmergencyAndPhone = canViewAllPersonalInfo || sharesRide;
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +67,22 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           emergencyPhone: d.rider.emergencyPhone,
           bloodGroup: d.rider.bloodGroup,
         });
+        // Check if logged-in user shares a ride with this rider
+        if (user?.linkedRiderId && user.linkedRiderId !== riderId) {
+          api.riders
+            .get(user.linkedRiderId)
+            .then((myData: unknown) => {
+              const myRider = (myData as { rider: RiderProfile }).rider;
+              const viewedRideIds = new Set(
+                d.rider.ridesParticipated.map((r) => r.rideId)
+              );
+              const hasSharedRide = myRider.ridesParticipated.some((r) =>
+                viewedRideIds.has(r.rideId)
+              );
+              setSharesRide(hasSharedRide);
+            })
+            .catch(() => {});
+        }
         const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
         if (saved) setAvatarUrl(saved);
         // Load saved edits
@@ -80,7 +100,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [riderId]);
+  }, [riderId, user?.linkedRiderId]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -274,7 +294,8 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 </span>
               </div>
 
-              {canViewPersonalInfo && (
+              {/* Email: super admin or own profile only */}
+              {canViewAllPersonalInfo && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
                   {rider.email && (
                     <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
@@ -282,16 +303,18 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                       <span>{rider.email}</span>
                     </div>
                   )}
-                  {rider.phone && (
-                    <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
-                      <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
-                      <span>{rider.phone}</span>
-                    </div>
-                  )}
+                </div>
+              )}
+              {/* Phone: super admin, own profile, or riders sharing a ride */}
+              {canViewEmergencyAndPhone && rider.phone && (
+                <div className="mt-2 flex items-center gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
+                  <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
+                  <span>{rider.phone}</span>
                 </div>
               )}
 
-              {canViewPersonalInfo && rider.address && (
+              {/* Address: super admin or own profile only */}
+              {canViewAllPersonalInfo && rider.address && (
                 <div className="mt-2 flex items-start gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
                   <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-t2w-accent/70" />
                   <span>{rider.address}</span>
@@ -500,8 +523,8 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           </div>
         </div>
 
-        {/* Emergency Contact - only visible to Core Members, Super Admins, or the rider themselves */}
-        {canViewPersonalInfo && rider.emergencyContact && (
+        {/* Emergency Contact - visible to super admin, own profile, or riders sharing a ride */}
+        {canViewEmergencyAndPhone && rider.emergencyContact && (
           <div className="card mb-8">
             <h3 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-white">
               <Shield className="h-5 w-5 text-red-400" />
