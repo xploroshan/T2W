@@ -1231,15 +1231,13 @@ export const riderProfiles: RiderProfile[] = [
     emergencyPhone: "9663721282",
     bloodGroup: "",
     joinDate: "2025-03-22",
-    ridesCompleted: 3,
-    totalKm: 1750,
+    ridesCompleted: 1,
+    totalKm: 450,
     ridesOrganized: 0,
     sweepsDone: 0,
     pilotsDone: 0,
     ridesParticipated: [
       { rideId: "ride-t2w-014", rideNumber: "#014", rideTitle: "Anniversary Ride", rideDate: "2025-03-22", distanceKm: 450 },
-      { rideId: "ride-t2w-019", rideNumber: "#019", rideTitle: "Ride to Harangi", rideDate: "2025-07-19", distanceKm: 500 },
-      { rideId: "ride-t2w-027", rideNumber: "#027", rideTitle: "Ride to Kavvayi Island", rideDate: "2026-02-20", distanceKm: 800 }
     ],
   },
   {
@@ -1271,8 +1269,8 @@ export const riderProfiles: RiderProfile[] = [
     emergencyPhone: "9886703193",
     bloodGroup: "",
     joinDate: "2024-04-20",
-    ridesCompleted: 3,
-    totalKm: 2190,
+    ridesCompleted: 6,
+    totalKm: 3940,
     ridesOrganized: 0,
     sweepsDone: 0,
     pilotsDone: 0,
@@ -1280,6 +1278,9 @@ export const riderProfiles: RiderProfile[] = [
       { rideId: "ride-t2w-002", rideNumber: "#002", rideTitle: "The Summer Break", rideDate: "2024-04-20", distanceKm: 540 },
       { rideId: "ride-t2w-008", rideNumber: "#008", rideTitle: "Tales on Tadiyandamol Trails", rideDate: "2024-09-21", distanceKm: 600 },
       { rideId: "ride-t2w-010", rideNumber: "#010", rideTitle: "Ride to East Coast - 2.0", rideDate: "2024-11-15", distanceKm: 1050 }
+      { rideId: "ride-t2w-014", rideNumber: "#014", rideTitle: "Anniversary Ride", rideDate: "2025-03-22", distanceKm: 450 },
+      { rideId: "ride-t2w-019", rideNumber: "#019", rideTitle: "Ride to Harangi", rideDate: "2025-07-19", distanceKm: 500 },
+      { rideId: "ride-t2w-027", rideNumber: "#027", rideTitle: "Ride to Kavvayi Island", rideDate: "2026-02-20", distanceKm: 800 }
     ],
   },
   {
