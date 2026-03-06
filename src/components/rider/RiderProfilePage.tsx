@@ -28,6 +28,12 @@ import type { RiderProfile } from "@/data/rider-profiles";
 
 export function RiderProfilePage({ riderId }: { riderId: string }) {
   const { user, canEditProfile, isSuperAdmin } = useAuth();
+  const isOwnProfile = user?.linkedRiderId === riderId;
+  // Super admin or own profile can see all personal info (email, phone, address, emergency)
+  const canViewAllPersonalInfo = isSuperAdmin || isOwnProfile;
+  // Riders sharing a ride can see phone + emergency contact only
+  const [sharesRide, setSharesRide] = useState(false);
+  const canViewEmergencyAndPhone = canViewAllPersonalInfo || sharesRide;
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,8 +67,27 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           emergencyPhone: d.rider.emergencyPhone,
           bloodGroup: d.rider.bloodGroup,
         });
-        const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
-        if (saved) setAvatarUrl(saved);
+        // Check if logged-in user shares a ride with this rider
+        if (user?.linkedRiderId && user.linkedRiderId !== riderId) {
+          api.riders
+            .get(user.linkedRiderId)
+            .then((myData: unknown) => {
+              const myRider = (myData as { rider: RiderProfile }).rider;
+              const viewedRideIds = new Set(
+                d.rider.ridesParticipated.map((r) => r.rideId)
+              );
+              const hasSharedRide = myRider.ridesParticipated.some((r) =>
+                viewedRideIds.has(r.rideId)
+              );
+              setSharesRide(hasSharedRide);
+            })
+            .catch(() => {});
+        }
+        // Load avatar from shared store first, then per-key fallback
+        const sharedAvatar = api.avatars.get(riderId);
+        const legacyAvatar = localStorage.getItem(`t2w_avatar_${riderId}`);
+        const avatar = sharedAvatar || legacyAvatar;
+        if (avatar) setAvatarUrl(avatar);
         // Load saved edits
         const savedEdits = localStorage.getItem(`t2w_profile_${riderId}`);
         if (savedEdits) {
@@ -78,7 +103,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [riderId]);
+  }, [riderId, user?.linkedRiderId]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,7 +120,9 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setAvatarUrl(dataUrl);
+      // Save to both legacy per-key and shared store for visibility
       localStorage.setItem(`t2w_avatar_${riderId}`, dataUrl);
+      api.avatars.save(riderId, dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -272,22 +299,27 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 </span>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-                {rider.email && (
-                  <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
-                    <Mail className="h-3.5 w-3.5 text-t2w-accent/70" />
-                    <span>{rider.email}</span>
-                  </div>
-                )}
-                {rider.phone && (
-                  <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
-                    <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
-                    <span>{rider.phone}</span>
-                  </div>
-                )}
-              </div>
+              {/* Email: super admin or own profile only */}
+              {canViewAllPersonalInfo && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
+                  {rider.email && (
+                    <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
+                      <Mail className="h-3.5 w-3.5 text-t2w-accent/70" />
+                      <span>{rider.email}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Phone: super admin, own profile, or riders sharing a ride */}
+              {canViewEmergencyAndPhone && rider.phone && (
+                <div className="mt-2 flex items-center gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
+                  <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
+                  <span>{rider.phone}</span>
+                </div>
+              )}
 
-              {rider.address && (
+              {/* Address: super admin or own profile only */}
+              {canViewAllPersonalInfo && rider.address && (
                 <div className="mt-2 flex items-start gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
                   <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-t2w-accent/70" />
                   <span>{rider.address}</span>
@@ -496,8 +528,8 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           </div>
         </div>
 
-        {/* Emergency Contact */}
-        {rider.emergencyContact && (
+        {/* Emergency Contact - visible to super admin, own profile, or riders sharing a ride */}
+        {canViewEmergencyAndPhone && rider.emergencyContact && (
           <div className="card mb-8">
             <h3 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-white">
               <Shield className="h-5 w-5 text-red-400" />
@@ -544,7 +576,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 .map((ride) => (
                   <Link
                     key={ride.rideId}
-                    href={`/ride?id=${ride.rideId}`}
+                    href={`/ride/${ride.rideId}`}
                     className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4 transition-all hover:bg-t2w-surface-light/80 hover:ring-1 hover:ring-t2w-accent/30"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-t2w-accent/10 font-mono text-sm font-bold text-t2w-accent">

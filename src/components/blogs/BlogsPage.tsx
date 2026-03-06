@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Search,
   Heart,
@@ -294,7 +295,7 @@ export function BlogsPage() {
 
         {/* Featured Post */}
         {featuredBlog && (
-          <div className="card-interactive group mb-10 overflow-hidden">
+          <Link href={`/blog/${featuredBlog.id}`} className="card-interactive group mb-10 overflow-hidden block">
             <div className="flex flex-col gap-6 md:flex-row md:items-center">
               <div className="flex h-48 w-full items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/10 md:h-64 md:w-80 shrink-0">
                 {featuredBlog.isVlog ? (
@@ -362,13 +363,14 @@ export function BlogsPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
         )}
 
         {/* Blog Grid */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {otherBlogs.map((blog) => (
-            <article key={blog.id} className="card-interactive group">
+            <Link key={blog.id} href={`/blog/${blog.id}`} className="block">
+            <article className="card-interactive group">
               <div className="mb-4 flex h-40 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-surface-light to-t2w-border/50">
                 {blog.isVlog ? (
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-t2w-accent/30">
@@ -430,6 +432,7 @@ export function BlogsPage() {
                 </div>
               </div>
             </article>
+            </Link>
           ))}
         </div>
 

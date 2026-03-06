@@ -46,8 +46,11 @@ interface AuthContextType {
   user: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginByEmail: (email: string) => Promise<void>;
-  resetPassword: (email: string) => Promise<string>;
+  sendResetOtp: (email: string) => Promise<{ emailSent: boolean }>;
+  verifyResetOtp: (email: string, code: string) => Promise<void>;
+  resetPassword: (email: string, newPassword: string) => Promise<void>;
+  sendOtp: (email: string) => Promise<string>;
+  verifyOtp: (email: string, code: string) => Promise<void>;
   register: (data: Record<string, unknown>) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -91,16 +94,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const loginByEmail = async (email: string) => {
-    const raw = await api.auth.loginByEmail(email);
-    const data = raw as unknown as { user: UserData };
-    setUser(data.user);
+  const sendResetOtp = async (email: string): Promise<{ emailSent: boolean }> => {
+    const result = await api.auth.sendResetOtp(email);
+    const data = result as unknown as { emailSent: boolean };
+    return { emailSent: data.emailSent };
   };
 
-  const resetPassword = async (email: string): Promise<string> => {
-    const result = await api.auth.resetPassword(email);
-    const data = result as unknown as { tempPassword: string };
-    return data.tempPassword;
+  const verifyResetOtp = async (email: string, code: string): Promise<void> => {
+    await api.auth.verifyResetOtp(email, code);
+  };
+
+  const resetPassword = async (email: string, newPassword: string): Promise<void> => {
+    await api.auth.resetPassword(email, newPassword);
+  };
+
+  const sendOtp = async (email: string): Promise<string> => {
+    const result = await api.auth.sendOtp(email);
+    const data = result as unknown as { message: string };
+    return data.message;
+  };
+
+  const verifyOtp = async (email: string, code: string): Promise<void> => {
+    await api.auth.verifyOtp(email, code);
   };
 
   const register = async (formData: Record<string, unknown>) => {
@@ -147,8 +162,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
-        loginByEmail,
+        sendResetOtp,
+        verifyResetOtp,
         resetPassword,
+        sendOtp,
+        verifyOtp,
         register,
         logout,
         refreshUser,

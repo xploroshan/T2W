@@ -15,16 +15,17 @@ import {
   MapPin,
   AlertCircle,
   Loader2,
-  X,
   CheckCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export function RegisterPage() {
-  const { register, loginByEmail } = useAuth();
+  const { register, sendOtp, verifyOtp } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // step 1: basic info + email, step 2: OTP verification, step 3: riding info
   const [step, setStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,15 +42,58 @@ export function RegisterPage() {
     agreeTerms: false,
   });
 
-  // Social login modal
-  const [showSocialModal, setShowSocialModal] = useState(false);
-  const [socialProvider, setSocialProvider] = useState<"Google" | "Facebook">("Google");
-  const [socialEmail, setSocialEmail] = useState("");
-  const [socialLoading, setSocialLoading] = useState(false);
-  const [socialError, setSocialError] = useState<string | null>(null);
+  // OTP state
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSendOtp = async () => {
+    if (!formData.email) {
+      setError("Please enter your email address first");
+      return;
+    }
+    setOtpSending(true);
+    setOtpError(null);
+    try {
+      await sendOtp(formData.email);
+      setOtpSent(true);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setOtpError(err.message);
+      } else {
+        setOtpError("Failed to send verification code. Please try again.");
+      }
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length < 6) {
+      setOtpError("Please enter the 6-digit verification code");
+      return;
+    }
+    setOtpSending(true);
+    setOtpError(null);
+    try {
+      await verifyOtp(formData.email, otpCode);
+      setOtpVerified(true);
+      setStep(3);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setOtpError(err.message);
+      } else {
+        setOtpError("Verification failed. Please try again.");
+      }
+    } finally {
+      setOtpSending(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,52 +105,39 @@ export function RegisterPage() {
         setError("Password must be at least 6 characters");
         return;
       }
+      if (formData.password !== formData.confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+      if (!formData.phone || formData.phone.length < 10) {
+        setError("Please enter a valid phone number");
+        return;
+      }
+      // Move to email verification step
       setStep(2);
       return;
     }
 
-    setLoading(true);
-    try {
-      const { name, email, phone, password, city, ridingExperience, motorcycle } = formData;
-      await register({ name, email, phone, password, city, ridingExperience, motorcycle });
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Registration failed. Please try again.");
+    if (step === 3) {
+      if (!otpVerified) {
+        setError("Please verify your email before registering");
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleSocialSignup = (provider: "Google" | "Facebook") => {
-    setSocialProvider(provider);
-    setSocialEmail("");
-    setSocialError(null);
-    setShowSocialModal(true);
-  };
-
-  const handleSocialSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSocialLoading(true);
-    setSocialError(null);
-
-    try {
-      // Try to log in with existing account first
-      await loginByEmail(socialEmail);
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message === "NO_ACCOUNT") {
-        // No account exists - pre-fill the registration form
-        setFormData((prev) => ({ ...prev, email: socialEmail }));
-        setShowSocialModal(false);
-      } else {
-        setSocialError("Something went wrong. Please try again.");
+      setLoading(true);
+      try {
+        const { name, email, phone, password, city, ridingExperience, motorcycle } = formData;
+        await register({ name, email, phone, password, city, ridingExperience, motorcycle });
+        router.push("/dashboard");
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Registration failed. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setSocialLoading(false);
     }
   };
 
@@ -122,8 +153,8 @@ export function RegisterPage() {
             <div className="h-12 w-12 shrink-0">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <span className="font-display text-2xl font-bold text-white">
-              T2W
+            <span className="text-2xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+              Tales on 2 Wheels
             </span>
           </Link>
           <h1 className="mt-6 font-display text-3xl font-bold text-white">
@@ -136,29 +167,35 @@ export function RegisterPage() {
 
         {/* Progress Steps */}
         <div className="mb-8 flex items-center justify-center gap-3">
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-              step >= 1
-                ? "bg-t2w-accent text-white"
-                : "bg-t2w-surface text-t2w-muted"
-            }`}
-          >
-            1
-          </div>
-          <div
-            className={`h-0.5 w-12 rounded-full ${
-              step >= 2 ? "bg-t2w-accent" : "bg-t2w-border"
-            }`}
-          />
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-              step >= 2
-                ? "bg-t2w-accent text-white"
-                : "bg-t2w-surface text-t2w-muted"
-            }`}
-          >
-            2
-          </div>
+          {[1, 2, 3].map((s) => (
+            <div key={s} className="flex items-center gap-3">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  step >= s
+                    ? "bg-t2w-accent text-white"
+                    : "bg-t2w-surface text-t2w-muted"
+                }`}
+              >
+                {s === 2 && otpVerified ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  s
+                )}
+              </div>
+              {s < 3 && (
+                <div
+                  className={`h-0.5 w-8 rounded-full ${
+                    step > s ? "bg-t2w-accent" : "bg-t2w-border"
+                  }`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mb-6 text-center text-xs text-t2w-muted">
+          {step === 1 && "Step 1: Account Details"}
+          {step === 2 && "Step 2: Email Verification"}
+          {step === 3 && "Step 3: Riding Info"}
         </div>
 
         <div className="card">
@@ -170,264 +207,339 @@ export function RegisterPage() {
             </div>
           )}
 
-          {/* Social Registration */}
-          {step === 1 && (
-            <>
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleSocialSignup("Google")}
-                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  Sign up with Google
-                </button>
-                <button
-                  onClick={() => handleSocialSignup("Facebook")}
-                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-t2w-border bg-t2w-surface-light py-3 text-sm font-medium text-white transition-all hover:border-t2w-accent/50"
-                >
-                  <svg
-                    className="h-5 w-5"
-                    viewBox="0 0 24 24"
-                    fill="#1877F2"
-                  >
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                  Sign up with Facebook
-                </button>
+          {/* Step 2: OTP Verification */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-t2w-accent/10">
+                  <ShieldCheck className="h-6 w-6 text-t2w-accent" />
+                </div>
+                <h3 className="font-display text-lg font-bold text-white">
+                  Verify Your Email
+                </h3>
+                <p className="mt-1 text-sm text-t2w-muted">
+                  We&apos;ll send a verification code to{" "}
+                  <span className="font-medium text-white">{formData.email}</span>
+                </p>
               </div>
 
-              <div className="my-6 flex items-center gap-4">
-                <div className="h-px flex-1 bg-t2w-border" />
-                <span className="text-xs text-t2w-muted">
-                  or register with email
-                </span>
-                <div className="h-px flex-1 bg-t2w-border" />
-              </div>
-            </>
-          )}
+              {otpError && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{otpError}</span>
+                </div>
+              )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {step === 1 ? (
-              <>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+              {!otpSent ? (
+                <button
+                  onClick={handleSendOtp}
+                  disabled={otpSending}
+                  className="btn-primary flex w-full items-center justify-center gap-2"
+                >
+                  {otpSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      Send Verification Code
+                      <Mail className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+                    <CheckCircle className="mr-1.5 inline h-4 w-4" />
+                    Verification code sent to {formData.email}
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Enter 6-digit code
+                    </label>
                     <input
                       type="text"
+                      maxLength={6}
                       required
-                      className="input-field !pl-10"
-                      placeholder="Your full name"
-                      value={formData.name}
-                      onChange={(e) => handleChange("name", e.target.value)}
+                      autoFocus
+                      className="input-field text-center text-lg font-mono tracking-[0.5em]"
+                      placeholder="000000"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                    <input
-                      type="email"
-                      required
-                      className="input-field !pl-10"
-                      placeholder="rider@example.com"
-                      value={formData.email}
-                      onChange={(e) => handleChange("email", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Phone Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                    <input
-                      type="tel"
-                      required
-                      className="input-field !pl-10"
-                      placeholder="+91 98765 43210"
-                      value={formData.phone}
-                      onChange={(e) => handleChange("phone", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      className="input-field !pl-10 !pr-10"
-                      placeholder="Create a strong password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        handleChange("password", e.target.value)
-                      }
-                    />
+                  <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-t2w-muted hover:text-white"
+                      onClick={handleSendOtp}
+                      disabled={otpSending}
+                      className="btn-secondary flex-1 text-sm"
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                      Resend Code
+                    </button>
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={otpSending || otpCode.length < 6}
+                      className="btn-primary flex flex-1 items-center justify-center gap-2"
+                    >
+                      {otpSending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <>
+                          Verify
+                          <ArrowRight className="h-4 w-4" />
+                        </>
                       )}
                     </button>
                   </div>
-                </div>
+                </>
+              )}
 
-                <button
-                  type="submit"
-                  className="btn-primary flex w-full items-center justify-center gap-2"
-                >
-                  Continue
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    City
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                    <input
-                      type="text"
-                      required
-                      className="input-field !pl-10"
-                      placeholder="Your city"
-                      value={formData.city}
-                      onChange={(e) => handleChange("city", e.target.value)}
-                    />
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-full text-center text-sm text-t2w-muted hover:text-white transition-colors"
+              >
+                &larr; Back to account details
+              </button>
+            </div>
+          )}
+
+          {/* Step 1 and Step 3 - form */}
+          {(step === 1 || step === 3) && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {step === 1 ? (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="text"
+                        required
+                        className="input-field !pl-10"
+                        placeholder="Your full name"
+                        value={formData.name}
+                        onChange={(e) => handleChange("name", e.target.value)}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Riding Experience
-                  </label>
-                  <select
-                    required
-                    className="input-field cursor-pointer"
-                    value={formData.ridingExperience}
-                    onChange={(e) =>
-                      handleChange("ridingExperience", e.target.value)
-                    }
-                  >
-                    <option value="">Select experience level</option>
-                    <option value="beginner">
-                      Beginner (Less than 1 year)
-                    </option>
-                    <option value="intermediate">
-                      Intermediate (1-3 years)
-                    </option>
-                    <option value="experienced">
-                      Experienced (3-5 years)
-                    </option>
-                    <option value="veteran">Veteran (5+ years)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                    Primary Motorcycle
-                  </label>
-                  <div className="relative">
-                    <Bike className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                    <input
-                      type="text"
-                      className="input-field !pl-10"
-                      placeholder="e.g., Royal Enfield Himalayan 450"
-                      value={formData.motorcycle}
-                      onChange={(e) =>
-                        handleChange("motorcycle", e.target.value)
-                      }
-                    />
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="email"
+                        required
+                        className="input-field !pl-10"
+                        placeholder="rider@example.com"
+                        value={formData.email}
+                        onChange={(e) => handleChange("email", e.target.value)}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={formData.agreeTerms}
-                    onChange={(e) =>
-                      handleChange("agreeTerms", e.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 rounded border-t2w-border accent-t2w-accent"
-                  />
-                  <span className="text-sm text-t2w-muted">
-                    I agree to the T2W{" "}
-                    <Link href="/guidelines" className="text-t2w-accent hover:text-t2w-accent/80">
-                      Riding Guidelines
-                    </Link>{" "}
-                    and community rules. I understand my registration requires
-                    admin approval.
-                  </span>
-                </label>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Phone Number
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="tel"
+                        required
+                        className="input-field !pl-10"
+                        placeholder="+91 98765 43210"
+                        value={formData.phone}
+                        onChange={(e) => handleChange("phone", e.target.value)}
+                      />
+                    </div>
+                  </div>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    disabled={loading}
-                    className="btn-secondary flex-1"
-                  >
-                    Back
-                  </button>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        className="input-field !pl-10 !pr-10"
+                        placeholder="Create a strong password (min 6 chars)"
+                        value={formData.password}
+                        onChange={(e) =>
+                          handleChange("password", e.target.value)
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-t2w-muted hover:text-white"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="password"
+                        required
+                        className="input-field !pl-10"
+                        placeholder="Confirm your password"
+                        value={formData.confirmPassword}
+                        onChange={(e) =>
+                          handleChange("confirmPassword", e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="btn-primary flex flex-1 items-center justify-center gap-2"
+                    className="btn-primary flex w-full items-center justify-center gap-2"
                   >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Registering...
-                      </>
-                    ) : (
-                      <>
-                        Register
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
+                    Continue
+                    <ArrowRight className="h-4 w-4" />
                   </button>
-                </div>
-              </>
-            )}
-          </form>
+                </>
+              ) : (
+                <>
+                  {/* Step 3 */}
+                  {otpVerified && (
+                    <div className="mb-2 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm text-green-400">
+                      <CheckCircle className="mr-1.5 inline h-4 w-4" />
+                      Email verified: {formData.email}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      City
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="text"
+                        required
+                        className="input-field !pl-10"
+                        placeholder="Your city"
+                        value={formData.city}
+                        onChange={(e) => handleChange("city", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Riding Experience
+                    </label>
+                    <select
+                      required
+                      className="input-field cursor-pointer"
+                      value={formData.ridingExperience}
+                      onChange={(e) =>
+                        handleChange("ridingExperience", e.target.value)
+                      }
+                    >
+                      <option value="">Select experience level</option>
+                      <option value="beginner">
+                        Beginner (Less than 1 year)
+                      </option>
+                      <option value="intermediate">
+                        Intermediate (1-3 years)
+                      </option>
+                      <option value="experienced">
+                        Experienced (3-5 years)
+                      </option>
+                      <option value="veteran">Veteran (5+ years)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                      Primary Motorcycle
+                    </label>
+                    <div className="relative">
+                      <Bike className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                      <input
+                        type="text"
+                        className="input-field !pl-10"
+                        placeholder="e.g., Royal Enfield Himalayan 450"
+                        value={formData.motorcycle}
+                        onChange={(e) =>
+                          handleChange("motorcycle", e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={formData.agreeTerms}
+                      onChange={(e) =>
+                        handleChange("agreeTerms", e.target.checked)
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-t2w-border accent-t2w-accent"
+                    />
+                    <span className="text-sm text-t2w-muted">
+                      I agree to the T2W{" "}
+                      <Link href="/guidelines" className="text-t2w-accent hover:text-t2w-accent/80">
+                        Riding Guidelines
+                      </Link>{" "}
+                      and community rules. I understand my registration requires
+                      admin approval.
+                    </span>
+                  </label>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      disabled={loading}
+                      className="btn-secondary flex-1"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn-primary flex flex-1 items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Registering...
+                        </>
+                      ) : (
+                        <>
+                          Register
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          )}
         </div>
 
         <p className="mt-6 text-center text-sm text-t2w-muted">
@@ -440,79 +552,6 @@ export function RegisterPage() {
           </Link>
         </p>
       </div>
-
-      {/* Social Signup Modal */}
-      {showSocialModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-sm rounded-2xl border border-t2w-border bg-t2w-surface p-6">
-            <button
-              onClick={() => setShowSocialModal(false)}
-              className="absolute right-4 top-4 text-t2w-muted hover:text-white"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-t2w-accent/10">
-                {socialProvider === "Google" ? (
-                  <svg className="h-6 w-6" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                ) : (
-                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="#1877F2">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                )}
-              </div>
-              <h3 className="font-display text-lg font-bold text-white">
-                Sign up with {socialProvider}
-              </h3>
-              <p className="mt-1 text-sm text-t2w-muted">
-                Enter your {socialProvider} email to get started
-              </p>
-            </div>
-
-            {socialError && (
-              <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{socialError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSocialSubmit} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  className="input-field !pl-10"
-                  placeholder={`Your ${socialProvider} email`}
-                  value={socialEmail}
-                  onChange={(e) => setSocialEmail(e.target.value)}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={socialLoading}
-                className="btn-primary flex w-full items-center justify-center gap-2"
-              >
-                {socialLoading ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

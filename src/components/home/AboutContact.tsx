@@ -1,20 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Heart,
   Target,
   Users,
   Send,
   Mail,
-  Phone,
   MapPin,
   Instagram,
   Youtube,
   CheckCircle,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api-client";
+
+interface CrewMember {
+  id: string;
+  name: string;
+  role: string;
+  linkedRiderId?: string;
+}
+
+const DEFAULT_ABOUT = {
+  story:
+    "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 140+ member community that has completed 27 rides across India, Nepal, and Thailand.",
+  mission:
+    "To create a safe, inclusive, and thrilling motorcycle riding community. We believe every ride is a story waiting to be told, every road a chapter waiting to be written. We promote responsible riding, camaraderie, and the pure joy of two wheels.",
+  community:
+    "From weekend warriors to seasoned tourers, T2W welcomes riders of all experience levels. Our rides range from easy day trips to challenging multi-day expeditions. Our veteran riders mentor newcomers, ensuring everyone rides safe and has fun.",
+};
+
+// Role labels for display in The Crew section
+const ROLE_LABELS: Record<string, string> = {
+  superadmin: "Founder & Lead Organiser",
+  core_member: "Core Member",
+};
 
 export function AboutContact() {
+  const { isSuperAdmin } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -23,11 +50,85 @@ export function AboutContact() {
   });
   const [submitted, setSubmitted] = useState(false);
 
+  // Editable About content
+  const [aboutContent, setAboutContent] = useState(DEFAULT_ABOUT);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(DEFAULT_ABOUT);
+
+  // Dynamic crew members
+  const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
+
+  useEffect(() => {
+    // Load saved About content
+    api.aboutContent.get().then((res) => {
+      const data = res as unknown as { content: Record<string, string> | null };
+      if (data.content) {
+        setAboutContent({
+          story: data.content.story || DEFAULT_ABOUT.story,
+          mission: data.content.mission || DEFAULT_ABOUT.mission,
+          community: data.content.community || DEFAULT_ABOUT.community,
+        });
+        setEditForm({
+          story: data.content.story || DEFAULT_ABOUT.story,
+          mission: data.content.mission || DEFAULT_ABOUT.mission,
+          community: data.content.community || DEFAULT_ABOUT.community,
+        });
+      }
+    });
+    // Load crew members dynamically
+    api.users.getCrew().then((res) => {
+      const data = res as unknown as { crew: CrewMember[] };
+      if (data.crew && data.crew.length > 0) {
+        setCrewMembers(data.crew);
+      }
+    });
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   };
+
+  const handleSaveAbout = async () => {
+    await api.aboutContent.save(editForm);
+    setAboutContent(editForm);
+    setEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditForm(aboutContent);
+    setEditing(false);
+  };
+
+  const aboutCards = [
+    { icon: Heart, title: "Our Story", key: "story" as const },
+    { icon: Target, title: "Our Mission", key: "mission" as const },
+    { icon: Users, title: "Our Community", key: "community" as const },
+  ];
+
+  // Build crew display list
+  const crewDisplay = crewMembers.length > 0
+    ? crewMembers.map((m) => ({
+        name: m.name,
+        role: ROLE_LABELS[m.role] || m.role,
+        initials: m.name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2),
+        riderId: m.linkedRiderId,
+        avatarUrl: m.linkedRiderId ? api.avatars.get(m.linkedRiderId) : null,
+      }))
+    : [
+        // Fallback static list
+        { name: "Roshan Manuel", role: "Founder & Lead Organiser", initials: "RM", riderId: undefined, avatarUrl: null },
+        { name: "Sanjeev Kumar", role: "Co-Founder & Sweep Rider", initials: "SK", riderId: undefined, avatarUrl: null },
+        { name: "Jay Trivedi", role: "Ride Organiser & Pilot", initials: "JT", riderId: undefined, avatarUrl: null },
+        { name: "Shreyas BM", role: "Ride Organiser", initials: "SB", riderId: undefined, avatarUrl: null },
+        { name: "Harish Mysuru", role: "Ride Organiser & Accounts", initials: "HM", riderId: undefined, avatarUrl: null },
+      ];
 
   return (
     <section id="about" className="relative py-24">
@@ -35,46 +136,70 @@ export function AboutContact() {
         {/* About Section */}
         <div className="mb-24">
           <div className="text-center">
-            <h2 className="section-title">About T2W</h2>
+            <div className="flex items-center justify-center gap-3">
+              <h2 className="section-title">About T2W</h2>
+              {isSuperAdmin && !editing && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg bg-t2w-surface-light p-2 text-t2w-muted transition-colors hover:bg-t2w-accent/20 hover:text-t2w-accent"
+                  title="Edit About T2W"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <p className="mx-auto mt-4 max-w-2xl section-subtitle">
               Born from a shared passion for motorcycles and the open road
             </p>
           </div>
 
-          <div className="mt-16 grid gap-8 md:grid-cols-3">
-            {[
-              {
-                icon: Heart,
-                title: "Our Story",
-                description:
-                  "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 140+ member community that has completed 27 rides across India, Nepal, and Thailand.",
-              },
-              {
-                icon: Target,
-                title: "Our Mission",
-                description:
-                  "To create a safe, inclusive, and thrilling motorcycle riding community. We believe every ride is a story waiting to be told, every road a chapter waiting to be written. We promote responsible riding, camaraderie, and the pure joy of two wheels.",
-              },
-              {
-                icon: Users,
-                title: "Our Community",
-                description:
-                  "From weekend warriors to seasoned tourers, T2W welcomes riders of all experience levels. Our rides range from easy day trips to challenging multi-day expeditions. Our veteran riders mentor newcomers, ensuring everyone rides safe and has fun.",
-              },
-            ].map(({ icon: Icon, title, description }) => (
-              <div key={title} className="card group text-center">
-                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-t2w-accent/10 transition-colors group-hover:bg-t2w-accent/20">
-                  <Icon className="h-7 w-7 text-t2w-accent" />
-                </div>
-                <h3 className="font-display text-xl font-bold text-white">
-                  {title}
-                </h3>
-                <p className="mt-3 text-sm leading-relaxed text-t2w-muted">
-                  {description}
-                </p>
+          {editing && isSuperAdmin ? (
+            <div className="mt-16">
+              <div className="grid gap-8 md:grid-cols-3">
+                {aboutCards.map(({ icon: Icon, title, key }) => (
+                  <div key={key} className="card group text-center">
+                    <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-t2w-accent/10">
+                      <Icon className="h-7 w-7 text-t2w-accent" />
+                    </div>
+                    <h3 className="font-display text-xl font-bold text-white">{title}</h3>
+                    <textarea
+                      rows={6}
+                      className="mt-3 w-full resize-none rounded-xl border border-t2w-border bg-t2w-surface-light p-3 text-sm leading-relaxed text-white focus:border-t2w-accent focus:outline-none"
+                      value={editForm[key]}
+                      onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="mt-6 flex justify-center gap-3">
+                <button onClick={handleSaveAbout} className="btn-primary flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-16 grid gap-8 md:grid-cols-3">
+              {aboutCards.map(({ icon: Icon, title, key }) => (
+                <div key={key} className="card group text-center">
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-t2w-accent/10 transition-colors group-hover:bg-t2w-accent/20">
+                    <Icon className="h-7 w-7 text-t2w-accent" />
+                  </div>
+                  <h3 className="font-display text-xl font-bold text-white">{title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-t2w-muted">
+                    {aboutContent[key]}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Team */}
           <div className="mt-16 text-center">
@@ -82,36 +207,18 @@ export function AboutContact() {
               The Crew
             </h3>
             <div className="flex flex-wrap items-center justify-center gap-6">
-              {[
-                {
-                  name: "Roshan Manuel",
-                  role: "Founder & Lead Organiser",
-                  initials: "RM",
-                },
-                {
-                  name: "Sanjeev Kumar",
-                  role: "Co-Founder & Sweep Rider",
-                  initials: "SK",
-                },
-                {
-                  name: "Jay Trivedi",
-                  role: "Ride Organiser & Pilot",
-                  initials: "JT",
-                },
-                {
-                  name: "Shreyas BM",
-                  role: "Ride Organiser",
-                  initials: "SB",
-                },
-                {
-                  name: "Harish Mysuru",
-                  role: "Ride Organiser & Accounts",
-                  initials: "HM",
-                },
-              ].map((member) => (
+              {crewDisplay.map((member) => (
                 <div key={member.name} className="group text-center">
-                  <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-t2w-accent to-red-600 font-display text-xl font-bold text-white transition-transform group-hover:scale-110">
-                    {member.initials}
+                  <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-t2w-accent to-red-600 font-display text-xl font-bold text-white transition-transform group-hover:scale-110">
+                    {member.avatarUrl ? (
+                      <img
+                        src={member.avatarUrl}
+                        alt={member.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      member.initials
+                    )}
                   </div>
                   <h4 className="text-sm font-semibold text-white">
                     {member.name}

@@ -34,18 +34,75 @@ function getStorage<T>(key: string, fallback: T): T {
 function setStorage(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
+  // Dispatch a custom event so other components/tabs can react to data changes
+  window.dispatchEvent(new CustomEvent("t2w-storage-update", { detail: { key } }));
 }
 
 // ── Storage keys ──
 const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
 const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
+const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
 const RIDE_REG_KEY = "t2w_ride_registrations";
 const NOTIF_KEY = "t2w_notif_read";
 const BLOGS_KEY = "t2w_blogs";
 const RIDE_POSTS_KEY = "t2w_ride_posts";
 const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
+const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
+const ACTIVITY_LOG_KEY = "t2w_activity_log";
+const ABOUT_CONTENT_KEY = "t2w_about_content"; // editable About T2W content
+const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across users)
+const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
+const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
+const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
+
+// ── Activity Log ──
+export type ActivityAction =
+  | "ride_created"
+  | "ride_edited"
+  | "ride_deleted"
+  | "user_approved"
+  | "user_rejected"
+  | "user_deleted"
+  | "user_bulk_deleted"
+  | "user_role_changed"
+  | "blog_approved"
+  | "blog_rejected"
+  | "post_approved"
+  | "post_rejected"
+  | "content_deleted"
+  | "form_settings_saved";
+
+export type ActivityLogEntry = {
+  id: string;
+  action: ActivityAction;
+  performedBy: string;
+  performedByName: string;
+  timestamp: string;
+  targetId: string;
+  targetName: string;
+  details?: string;
+  rollbackData?: unknown;
+};
+
+function getActivityLog(): ActivityLogEntry[] {
+  return getStorage<ActivityLogEntry[]>(ACTIVITY_LOG_KEY, []);
+}
+
+function addActivityLog(
+  entry: Omit<ActivityLogEntry, "id" | "timestamp">
+) {
+  const log = getActivityLog();
+  log.unshift({
+    ...entry,
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: new Date().toISOString(),
+  });
+  // Keep last 200 entries
+  if (log.length > 200) log.length = 200;
+  setStorage(ACTIVITY_LOG_KEY, log);
+}
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -164,6 +221,22 @@ function getBuiltinUsers(): StoredUser[] {
   ];
 }
 
+// Clear password overrides for built-in users so they always work with their default passwords
+function clearBuiltinPasswordOverrides() {
+  if (typeof window === "undefined") return;
+  const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+  const builtinEmails = getBuiltinUsers().map((u) => u.email.toLowerCase());
+  let changed = false;
+  for (const email of builtinEmails) {
+    if (overrides[email]) {
+      delete overrides[email];
+      changed = true;
+    }
+  }
+  if (changed) setStorage(PASSWORDS_KEY, overrides);
+}
+clearBuiltinPasswordOverrides();
+
 function getRegisteredUsers(): StoredUser[] {
   const stored = getStorage<StoredUser[]>(USERS_KEY, []);
   // Merge: built-in users take precedence for their emails
@@ -172,7 +245,15 @@ function getRegisteredUsers(): StoredUser[] {
   const customUsers = stored.filter(
     (u) => !builtinEmails.has(u.email.toLowerCase())
   );
-  return [...builtinUsers, ...customUsers];
+  // Apply role overrides (persisted by SuperAdmin role changes)
+  const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+  const allUsers = [...builtinUsers, ...customUsers];
+  for (const user of allUsers) {
+    if (roleOverrides[user.id]) {
+      user.role = roleOverrides[user.id];
+    }
+  }
+  return allUsers;
 }
 
 function saveCustomUsers(users: StoredUser[]) {
@@ -283,7 +364,10 @@ function getCustomRides(): Ride[] {
 }
 
 function getAllRides(): Ride[] {
-  return [...mockRides, ...getCustomRides()];
+  const custom = getCustomRides();
+  const customIds = new Set(custom.map((r) => r.id));
+  // Custom rides override mock rides with the same id
+  return [...mockRides.filter((r) => !customIds.has(r.id)), ...custom];
 }
 
 // ── API object ──
@@ -296,10 +380,9 @@ export const api = {
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => {
         if (u.email.toLowerCase() !== emailLower) return false;
-        // Check password overrides first (set via forgot password)
+        // Accept either the override password (from forgot password) or the original
         const override = overrides[emailLower];
-        if (override) return password === override;
-        // Fallback to stored password
+        if (override && password === override) return true;
         return u.password === password;
       });
       if (!found) throw new Error("Invalid email or password");
@@ -307,34 +390,86 @@ export const api = {
       return buildUserData(found);
     },
 
-    // Social / email-only login (Google, Facebook simulation)
-    loginByEmail: async (email: string) => {
-      await delay(300);
-      const users = getRegisteredUsers();
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => u.email.toLowerCase() === emailLower);
-      if (!found) throw new Error("NO_ACCOUNT");
-      setStorage(AUTH_KEY, found.id);
-      return buildUserData(found);
-    },
-
-    // Forgot password - generates a temp password and returns it
-    resetPassword: async (email: string) => {
+    // Step 1: Send a 6-digit OTP to the user's registered email
+    sendResetOtp: async (email: string) => {
       await delay(400);
       const users = getRegisteredUsers();
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => u.email.toLowerCase() === emailLower);
       if (!found) throw new Error("No account found with this email");
-      // Generate a random temporary password
-      const tempPassword = "T2W" + Math.random().toString(36).substring(2, 8);
-      // Store as override
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = tempPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      return { success: true, tempPassword };
+      // Generate 6-digit OTP with 10-minute expiry
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(RESET_OTP_KEY, otps);
+      // Send OTP via server-side API route (nodemailer)
+      let emailSent = false;
+      try {
+        const res = await fetch("/api/auth/send-reset-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
+        });
+        const data = await res.json();
+        emailSent = data.emailSent === true;
+      } catch {
+        // API route unavailable (e.g. static export) – fall through
+      }
+      if (!emailSent) {
+        console.info(`[T2W-DEV] Password reset OTP for ${emailLower}: ${code}`);
+      }
+      return { success: true, emailSent };
     },
 
-    // Change password (after reset or voluntarily)
+    // Step 2: Verify the OTP code the user received via email
+    verifyResetOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No reset code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(RESET_OTP_KEY, otps);
+        throw new Error("Reset code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid code. Please try again.");
+      // OTP verified – remove it and create a short-lived verified session (5 min)
+      delete otps[emailLower];
+      setStorage(RESET_OTP_KEY, otps);
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      verified[emailLower] = Date.now() + 5 * 60 * 1000;
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Step 3: Set new password (only after OTP verified)
+    resetPassword: async (email: string, newPassword: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      // Check verified session
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      const expiresAt = verified[emailLower];
+      if (!expiresAt || Date.now() > expiresAt) {
+        delete verified[emailLower];
+        setStorage(RESET_VERIFIED_KEY, verified);
+        throw new Error("Reset session expired. Please start over.");
+      }
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
+      // Set the new password as override
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = newPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      // Clear verified session
+      delete verified[emailLower];
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Change password (after login, voluntarily)
     changePassword: async (email: string, newPassword: string) => {
       await delay(200);
       const emailLower = email.toLowerCase().trim();
@@ -342,6 +477,48 @@ export const api = {
       overrides[emailLower] = newPassword;
       setStorage(PASSWORDS_KEY, overrides);
       return { success: true };
+    },
+
+    // Send OTP to email for verification (simulated)
+    sendOtp: async (email: string) => {
+      await delay(300);
+      const emailLower = email.toLowerCase().trim();
+      if (!emailLower || !emailLower.includes("@")) {
+        throw new Error("Please enter a valid email address");
+      }
+      // Check if email already registered
+      const users = getRegisteredUsers();
+      if (users.find((u) => u.email.toLowerCase() === emailLower)) {
+        throw new Error("An account with this email already exists");
+      }
+      // Generate 6-digit OTP
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(EMAIL_OTP_KEY, otps);
+      // In production, this would send a real email
+      console.info(`[T2W] OTP for ${email}: ${code}`);
+      return { success: true, message: `Verification code sent to ${email}` };
+    },
+
+    // Verify OTP code
+    verifyOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No verification code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(EMAIL_OTP_KEY, otps);
+        throw new Error("Verification code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid verification code. Please try again.");
+      // Mark as verified by removing from pending
+      delete otps[emailLower];
+      setStorage(EMAIL_OTP_KEY, otps);
+      return { success: true, verified: true };
     },
 
     register: async (data: Record<string, unknown>) => {
@@ -529,9 +706,14 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only)
+    // Change role (SuperAdmin only) – persisted via role overrides map
     changeRole: async (id: string, newRole: UserRole) => {
       await delay(200);
+      // Persist the role override for ALL user types (built-in, custom, static)
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+      roleOverrides[id] = newRole;
+      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+      // Also update custom users if they exist there
       const users = getRegisteredUsers();
       const user = users.find((u) => u.id === id);
       if (user) {
@@ -539,7 +721,7 @@ export const api = {
         saveCustomUsers(users);
       } else {
         // User may exist only in static data (riderProfiles/mockAllUsers).
-        // Create a custom record so the role change persists.
+        // Create a custom record so the user shows up in queries.
         const staticUser = mockAllUsers.find((u) => u.id === id);
         const riderProfile = riderProfiles.find((r) => r.id === id);
         const source = staticUser || riderProfile;
@@ -561,6 +743,21 @@ export const api = {
         }
       }
       return { success: true, id, role: newRole };
+    },
+    // Get crew members (superadmin + core_member roles) for "The Crew" section
+    getCrew: async () => {
+      await delay(100);
+      const users = getRegisteredUsers();
+      const crewRoles = new Set(["superadmin", "core_member"]);
+      const crew = users
+        .filter((u) => crewRoles.has(u.role))
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          linkedRiderId: u.linkedRiderId,
+        }));
+      return { crew };
     },
   },
 
@@ -592,6 +789,22 @@ export const api = {
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
+      const custom = getCustomRides();
+      const idx = custom.findIndex((r) => r.id === id);
+      if (idx !== -1) {
+        custom[idx] = { ...custom[idx], ...data } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { ride: custom[idx] };
+      }
+      // For mock rides, store as a custom override
+      const allRides = getAllRides();
+      const mockRide = allRides.find((r) => r.id === id);
+      if (mockRide) {
+        const updated = { ...mockRide, ...data } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { ride: updated };
+      }
       return { ride: { id, ...data } };
     },
     delete: async (id: string) => {
@@ -625,14 +838,20 @@ export const api = {
         rideId: id,
         userId,
         riderName: String(data?.riderName || ""),
+        address: String(data?.address || ""),
         email: String(data?.email || ""),
         phone: String(data?.phone || ""),
         emergencyContactName: String(data?.emergencyContactName || ""),
         emergencyContactPhone: String(data?.emergencyContactPhone || ""),
         bloodGroup: String(data?.bloodGroup || ""),
+        referredBy: String(data?.referredBy || ""),
+        foodPreference: String(data?.foodPreference || "") as RideRegistration["foodPreference"],
+        ridingType: String(data?.ridingType || "") as RideRegistration["ridingType"],
         vehicleModel: String(data?.vehicleModel || ""),
         vehicleRegNumber: String(data?.vehicleRegNumber || ""),
+        agreedCancellationTerms: Boolean(data?.agreedCancellationTerms),
         agreedIndemnity: Boolean(data?.agreedIndemnity),
+        paymentScreenshot: String(data?.paymentScreenshot || ""),
         registeredAt: new Date().toISOString(),
         confirmationCode: code,
       };
@@ -644,6 +863,18 @@ export const api = {
     unregister: async (id: string) => {
       await delay(200);
       return { success: true, id };
+    },
+  },
+
+  regFormSettings: {
+    get: async () => {
+      await delay(50);
+      return getStorage<Record<string, unknown>>(REG_FORM_SETTINGS_KEY, {});
+    },
+    save: async (settings: Record<string, unknown>) => {
+      await delay(100);
+      setStorage(REG_FORM_SETTINGS_KEY, settings);
+      return { success: true };
     },
   },
 
@@ -941,6 +1172,116 @@ export const api = {
         await delay(200);
         return { success: true, id };
       },
+    },
+  },
+
+  activityLog: {
+    list: async () => {
+      await delay(50);
+      return { entries: getActivityLog() };
+    },
+    add: (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
+      addActivityLog(entry);
+    },
+    rollback: async (entryId: string) => {
+      await delay(100);
+      const log = getActivityLog();
+      const entry = log.find((e) => e.id === entryId);
+      if (!entry || !entry.rollbackData) {
+        throw new Error("Cannot rollback this action");
+      }
+
+      const data = entry.rollbackData as Record<string, unknown>;
+
+      switch (entry.action) {
+        case "ride_deleted": {
+          // Re-add the deleted ride
+          const custom = getCustomRides();
+          custom.push(data as unknown as Ride);
+          setStorage(RIDES_KEY, custom);
+          break;
+        }
+        case "user_deleted": {
+          // Re-add the deleted user
+          const users = getRegisteredUsers();
+          users.push(data as unknown as StoredUser);
+          saveCustomUsers(users);
+          // Remove from deleted IDs
+          const deletedIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          setStorage(DELETED_USERS_KEY, deletedIds.filter((id) => id !== entry.targetId));
+          break;
+        }
+        case "user_bulk_deleted": {
+          // Re-add all deleted users
+          const bulkUsers = data.users as unknown as StoredUser[];
+          const currentUsers = getRegisteredUsers();
+          currentUsers.push(...bulkUsers);
+          saveCustomUsers(currentUsers);
+          const deletedBulkIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          const restoredIds = new Set(bulkUsers.map((u) => u.id));
+          setStorage(DELETED_USERS_KEY, deletedBulkIds.filter((id) => !restoredIds.has(id)));
+          break;
+        }
+        case "ride_edited": {
+          // Restore original ride data
+          const ridecustom = getCustomRides();
+          const rideIdx = ridecustom.findIndex((r) => r.id === entry.targetId);
+          if (rideIdx !== -1) {
+            ridecustom[rideIdx] = data as unknown as Ride;
+          } else {
+            ridecustom.push(data as unknown as Ride);
+          }
+          setStorage(RIDES_KEY, ridecustom);
+          break;
+        }
+        case "user_role_changed": {
+          // Restore original role
+          const roleUsers = getRegisteredUsers();
+          const roleUser = roleUsers.find((u) => u.id === entry.targetId);
+          if (roleUser) {
+            roleUser.role = data.previousRole as UserRole;
+            saveCustomUsers(roleUsers);
+          }
+          break;
+        }
+        default:
+          throw new Error("Rollback not supported for this action type");
+      }
+
+      // Mark as rolled back in the log
+      const updatedLog = getActivityLog();
+      const idx = updatedLog.findIndex((e) => e.id === entryId);
+      if (idx !== -1) {
+        updatedLog[idx] = { ...updatedLog[idx], rollbackData: undefined, details: (updatedLog[idx].details || "") + " [ROLLED BACK]" };
+        setStorage(ACTIVITY_LOG_KEY, updatedLog);
+      }
+
+      return { success: true };
+    },
+  },
+
+  // About T2W content (editable by Super Admin)
+  aboutContent: {
+    get: async () => {
+      const saved = getStorage<Record<string, string> | null>(ABOUT_CONTENT_KEY, null);
+      return { content: saved };
+    },
+    save: async (content: Record<string, string>) => {
+      setStorage(ABOUT_CONTENT_KEY, content);
+      return { success: true };
+    },
+  },
+
+  // Shared avatar storage
+  avatars: {
+    get: (riderId: string): string | null => {
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      return avatars[riderId] || null;
+    },
+    save: (riderId: string, dataUrl: string) => {
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = dataUrl;
+      setStorage(AVATARS_KEY, avatars);
     },
   },
 

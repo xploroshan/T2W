@@ -27,12 +27,20 @@ import {
   ArrowUpDown,
   Search,
   Mail,
+  Settings,
+  Save,
+  ToggleLeft,
+  ToggleRight,
+  Clock,
+  RotateCcw,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
+import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals";
+type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals" | "form-settings" | "activity";
 
 type PendingUser = {
   id: string;
@@ -139,6 +147,40 @@ export function AdminPage() {
   });
   const [publishingRide, setPublishingRide] = useState(false);
 
+  // Edit ride state
+  const [editingRideId, setEditingRideId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "", rideNumber: "", type: "day", status: "upcoming",
+    startDate: "", endDate: "", startLocation: "", endLocation: "",
+    distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy",
+    description: "", leadRider: "", sweepRider: "", meetupTime: "",
+    rideStartTime: "", startingPoint: "", organisedBy: "", accountsBy: "",
+    highlights: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "ride" | "user" | "bulk-users";
+    id: string;
+    name: string;
+    data?: unknown;
+  } | null>(null);
+
+  // Activity log state
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [rollingBack, setRollingBack] = useState<string | null>(null);
+
+  // Registration form settings (SuperAdmin)
+  const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
+  const [savingFormSettings, setSavingFormSettings] = useState(false);
+  const [formSettings, setFormSettings] = useState({
+    cancellationText: "Post registration, if you cancel\n1. Partial Refund: If the stay owner waives the booking charge or if a replacement rider is found, a cancellation fee of \u20B9500 will be deducted and the remaining amount will be refunded to you.\n2. No Refund: If a replacement rider is not available and the stay owner charges for your reserved slot, we will be unable to offer a refund.",
+    upiId: "taleson2wheels@upi",
+    bankDetails: "Contact admin for details",
+    hiddenFields: [] as string[],
+  });
+
   useEffect(() => {
     if (!user || !isCoreOrAbove) return;
 
@@ -161,13 +203,37 @@ export function AdminPage() {
         if (postsData) setPendingPosts((postsData as { posts: PendingPost[] }).posts);
       })
       .finally(() => setLoading(false));
+
+    // Load activity log
+    if (isSuperAdmin) {
+      api.activityLog.list().then((data) => {
+        setActivityLog(data.entries);
+      });
+    }
+
+    // Load form settings
+    api.regFormSettings.get().then((s) => {
+      if (s && Object.keys(s).length > 0) {
+        setFormSettings((prev) => ({ ...prev, ...s } as typeof prev));
+      }
+      setFormSettingsLoaded(true);
+    });
   }, [user, isCoreOrAbove]);
 
   const approveUser = async (id: string) => {
     try {
+      const targetUser = pendingUsers.find((u) => u.id === id);
       await api.users.approve(id);
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       if (stats) setStats({ ...stats, pendingUsers: stats.pendingUsers - 1 });
+      api.activityLog.add({
+        action: "user_approved",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: targetUser?.name || id,
+        details: `Approved user "${targetUser?.name || id}"`,
+      });
     } catch (err) {
       console.error("Failed to approve user:", err);
     }
@@ -175,32 +241,158 @@ export function AdminPage() {
 
   const rejectUser = async (id: string) => {
     try {
+      const targetUser = pendingUsers.find((u) => u.id === id);
       await api.users.reject(id);
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       if (stats) setStats({ ...stats, pendingUsers: stats.pendingUsers - 1, totalUsers: stats.totalUsers - 1 });
+      api.activityLog.add({
+        action: "user_rejected",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: targetUser?.name || id,
+        details: `Rejected user "${targetUser?.name || id}"`,
+      });
     } catch (err) {
       console.error("Failed to reject user:", err);
     }
   };
 
-  const deleteRide = async (id: string) => {
-    if (!canDeleteRide) return;
+  const confirmDeleteRide = (ride: AdminRide) => {
+    setDeleteConfirm({ type: "ride", id: ride.id, name: ride.title });
+  };
+
+  const executeDeleteRide = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "ride" || !canDeleteRide) return;
+    const { id, name } = deleteConfirm;
     try {
+      // Fetch full ride data for rollback before deleting
+      const result = await api.rides.get(id);
+      const rideData = (result as { ride: Record<string, unknown> }).ride;
       await api.rides.delete(id);
       setRides((prev) => prev.filter((r) => r.id !== id));
+      api.activityLog.add({
+        action: "ride_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: name,
+        details: `Deleted ride "${name}"`,
+        rollbackData: rideData,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: id, targetName: name, details: `Deleted ride "${name}"`, rollbackData: rideData }, ...prev]);
     } catch (err) {
       console.error("Failed to delete ride:", err);
+    } finally {
+      setDeleteConfirm(null);
+    }
+  };
+
+  const startEditRide = async (id: string) => {
+    try {
+      const result = await api.rides.get(id);
+      const r = (result as { ride: Record<string, unknown> }).ride;
+      setEditForm({
+        title: String(r.title || ""),
+        rideNumber: String(r.rideNumber || ""),
+        type: String(r.type || "day"),
+        status: String(r.status || "upcoming"),
+        startDate: String(r.startDate || "").split("T")[0],
+        endDate: String(r.endDate || "").split("T")[0],
+        startLocation: String(r.startLocation || ""),
+        endLocation: String(r.endLocation || ""),
+        distanceKm: String(r.distanceKm || ""),
+        maxRiders: String(r.maxRiders || "20"),
+        fee: String(r.fee || "0"),
+        difficulty: String(r.difficulty || "easy"),
+        description: String(r.description || ""),
+        leadRider: String(r.leadRider || ""),
+        sweepRider: String(r.sweepRider || ""),
+        meetupTime: String(r.meetupTime || ""),
+        rideStartTime: String(r.rideStartTime || ""),
+        startingPoint: String(r.startingPoint || ""),
+        organisedBy: String(r.organisedBy || ""),
+        accountsBy: String(r.accountsBy || ""),
+        highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
+      });
+      setEditingRideId(id);
+    } catch (err) {
+      console.error("Failed to load ride:", err);
+    }
+  };
+
+  const saveEditRide = async () => {
+    if (!editingRideId || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      // Fetch current ride data for rollback
+      const currentResult = await api.rides.get(editingRideId);
+      const oldRideData = (currentResult as { ride: Record<string, unknown> }).ride;
+      await api.rides.update(editingRideId, {
+        title: editForm.title,
+        rideNumber: editForm.rideNumber,
+        type: editForm.type,
+        status: editForm.status,
+        startDate: editForm.startDate,
+        endDate: editForm.endDate || editForm.startDate,
+        startLocation: editForm.startLocation,
+        endLocation: editForm.endLocation,
+        distanceKm: Number(editForm.distanceKm) || 0,
+        maxRiders: Number(editForm.maxRiders) || 20,
+        fee: Number(editForm.fee) || 0,
+        difficulty: editForm.difficulty,
+        description: editForm.description,
+        leadRider: editForm.leadRider,
+        sweepRider: editForm.sweepRider,
+        meetupTime: editForm.meetupTime,
+        rideStartTime: editForm.rideStartTime,
+        startingPoint: editForm.startingPoint,
+        organisedBy: editForm.organisedBy,
+        accountsBy: editForm.accountsBy,
+        route: [editForm.startLocation, editForm.endLocation],
+        highlights: editForm.highlights.split("\n").map((h) => h.trim()).filter(Boolean),
+      });
+      // Refresh rides list
+      const ridesData = await api.rides.list();
+      setRides((ridesData as { rides: AdminRide[] }).rides);
+      api.activityLog.add({
+        action: "ride_edited",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: editingRideId,
+        targetName: editForm.title,
+        details: `Edited ride "${editForm.title}"`,
+        rollbackData: oldRideData,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_edited", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: editingRideId, targetName: editForm.title, details: `Edited ride "${editForm.title}"`, rollbackData: oldRideData }, ...prev]);
+      setEditingRideId(null);
+    } catch (err) {
+      console.error("Failed to update ride:", err);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
   const changeUserRole = async (userId: string, newRole: UserRole) => {
     if (!canManageRoles) return;
     try {
+      const targetUser = allUsers.find((u) => u.id === userId);
+      const previousRole = targetUser?.role || "rider";
       await api.users.changeRole(userId, newRole);
       setAllUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
       setRoleChangeUser(null);
+      api.activityLog.add({
+        action: "user_role_changed",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: userId,
+        targetName: targetUser?.name || userId,
+        details: `Changed role from ${ROLE_LABELS[previousRole] || previousRole} to ${ROLE_LABELS[newRole] || newRole}`,
+        rollbackData: { previousRole },
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_role_changed", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: userId, targetName: targetUser?.name || userId, details: `Changed role from ${ROLE_LABELS[previousRole] || previousRole} to ${ROLE_LABELS[newRole] || newRole}`, rollbackData: { previousRole } }, ...prev]);
     } catch (err) {
       console.error("Failed to change role:", err);
     }
@@ -246,28 +438,66 @@ export function AdminPage() {
     }
   };
 
-  const deleteUser = async (id: string, name: string) => {
-    if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+  const confirmDeleteUser = (id: string, name: string) => {
+    const userData = allUsers.find((u) => u.id === id);
+    setDeleteConfirm({ type: "user", id, name, data: userData });
+  };
+
+  const executeDeleteUser = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "user") return;
+    const { id, name, data } = deleteConfirm;
     try {
       await api.users.delete(id);
       setAllUsers((prev) => prev.filter((u) => u.id !== id));
+      api.activityLog.add({
+        action: "user_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: id,
+        targetName: name,
+        details: `Deleted user "${name}"`,
+        rollbackData: data,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: id, targetName: name, details: `Deleted user "${name}"`, rollbackData: data }, ...prev]);
     } catch (err) {
       console.error("Failed to delete user:", err);
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
-  const deleteNonGmailUsers = async () => {
+  const confirmDeleteNonGmailUsers = () => {
     if (nonGmailUsers.length === 0) return;
-    if (!confirm(`Delete ${nonGmailUsers.length} users with non-Gmail email addresses? Super Admins and Core Members will NOT be deleted. This cannot be undone.`)) return;
+    setDeleteConfirm({
+      type: "bulk-users",
+      id: "bulk",
+      name: `${nonGmailUsers.length} non-Gmail users`,
+      data: nonGmailUsers,
+    });
+  };
+
+  const executeDeleteBulkUsers = async () => {
+    if (!deleteConfirm || deleteConfirm.type !== "bulk-users") return;
     setDeletingUsers(true);
     try {
       const ids = nonGmailUsers.map((u) => u.id);
       await api.users.bulkDelete(ids);
       setAllUsers((prev) => prev.filter((u) => !ids.includes(u.id)));
+      api.activityLog.add({
+        action: "user_bulk_deleted",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: "bulk",
+        targetName: `${nonGmailUsers.length} non-Gmail users`,
+        details: `Bulk deleted ${nonGmailUsers.length} non-Gmail users`,
+        rollbackData: { users: deleteConfirm.data },
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_bulk_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: "bulk", targetName: `${nonGmailUsers.length} non-Gmail users`, details: `Bulk deleted ${nonGmailUsers.length} non-Gmail users`, rollbackData: { users: deleteConfirm.data } }, ...prev]);
     } catch (err) {
       console.error("Failed to bulk delete users:", err);
     } finally {
       setDeletingUsers(false);
+      setDeleteConfirm(null);
     }
   };
 
@@ -296,6 +526,15 @@ export function AdminPage() {
       const newRide = (result as { ride: AdminRide }).ride;
       setRides((prev) => [newRide, ...prev]);
       setShowAddRide(false);
+      api.activityLog.add({
+        action: "ride_created",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: newRide.id,
+        targetName: rideForm.title,
+        details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})`,
+      });
+      setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_created", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: newRide.id, targetName: rideForm.title, details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})` }, ...prev]);
       setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
     } catch (err) {
       console.error("Failed to create ride:", err);
@@ -313,28 +552,58 @@ export function AdminPage() {
     }
   };
 
+  const saveFormSettings = async () => {
+    setSavingFormSettings(true);
+    try {
+      await api.regFormSettings.save(formSettings as unknown as Record<string, unknown>);
+      api.activityLog.add({ action: "form_settings_saved", performedBy: user!.id, performedByName: user!.name, targetId: "form-settings", targetName: "Registration Form", details: "Updated registration form settings" });
+      alert("Registration form settings saved successfully!");
+    } catch {
+      alert("Failed to save settings.");
+    } finally {
+      setSavingFormSettings(false);
+    }
+  };
+
+  const toggleHiddenField = (field: string) => {
+    setFormSettings((prev) => ({
+      ...prev,
+      hiddenFields: prev.hiddenFields.includes(field)
+        ? prev.hiddenFields.filter((f) => f !== field)
+        : [...prev.hiddenFields, field],
+    }));
+  };
+
   const approveBlog = async (id: string) => {
     if (!user) return;
+    const blog = pendingBlogs.find((b) => b.id === id);
     await api.blogs.approve(id, user.id);
     setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+    api.activityLog.add({ action: "blog_approved", performedBy: user.id, performedByName: user.name, targetId: id, targetName: blog?.title || id, details: `Approved blog "${blog?.title || id}"` });
   };
 
   const rejectBlog = async (id: string) => {
     if (!user) return;
+    const blog = pendingBlogs.find((b) => b.id === id);
     await api.blogs.reject(id, user.id);
     setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+    api.activityLog.add({ action: "blog_rejected", performedBy: user.id, performedByName: user.name, targetId: id, targetName: blog?.title || id, details: `Rejected blog "${blog?.title || id}"` });
   };
 
   const approvePost = async (id: string) => {
     if (!user) return;
+    const post = pendingPosts.find((p) => p.id === id);
     await api.ridePosts.approve(id, user.id);
     setPendingPosts((prev) => prev.filter((p) => p.id !== id));
+    api.activityLog.add({ action: "post_approved", performedBy: user.id, performedByName: user.name, targetId: id, targetName: post?.authorName || id, details: `Approved ride post by ${post?.authorName || id}` });
   };
 
   const rejectPost = async (id: string) => {
     if (!user) return;
+    const post = pendingPosts.find((p) => p.id === id);
     await api.ridePosts.reject(id, user.id);
     setPendingPosts((prev) => prev.filter((p) => p.id !== id));
+    api.activityLog.add({ action: "post_rejected", performedBy: user.id, performedByName: user.name, targetId: id, targetName: post?.authorName || id, details: `Rejected ride post by ${post?.authorName || id}` });
   };
 
   if (authLoading) {
@@ -366,6 +635,12 @@ export function AdminPage() {
     { key: "rides" as const, label: "Rides", icon: Bike },
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
+    ...(isSuperAdmin
+      ? [{ key: "form-settings" as const, label: "Form Settings", icon: Settings }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "activity" as const, label: "Activity", icon: Activity }]
+      : []),
   ];
 
   if (loading) {
@@ -544,7 +819,7 @@ export function AdminPage() {
                   {/* Bulk delete non-Gmail */}
                   {nonGmailUsers.length > 0 && (
                     <button
-                      onClick={deleteNonGmailUsers}
+                      onClick={confirmDeleteNonGmailUsers}
                       disabled={deletingUsers}
                       className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20"
                       title="Delete all users without @gmail.com email (excludes Super Admins and Core Members)"
@@ -651,7 +926,7 @@ export function AdminPage() {
                             )}
                             {u.role !== "superadmin" && (
                               <button
-                                onClick={() => deleteUser(u.id, u.name)}
+                                onClick={() => confirmDeleteUser(u.id, u.name)}
                                 className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-red-400/10 hover:text-red-400 transition-colors"
                                 title="Delete User"
                               >
@@ -711,28 +986,85 @@ export function AdminPage() {
 
             <div className="space-y-3">
               {rides.map((ride) => (
-                <div key={ride.id} className="card flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-white truncate">{ride.title}</h4>
-                      <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
-                        ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
-                      }`}>{ride.status}</span>
+                <div key={ride.id}>
+                  <div className="card flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-white truncate">{ride.title}</h4>
+                        <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
+                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
+                        }`}>{ride.status}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-t2w-muted">
+                        {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-t2w-muted">
-                      {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
-                    </p>
+                    <div className="flex gap-2">
+                      <Link href={`/ride/${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
+                        <Eye className="h-3.5 w-3.5" />View
+                      </Link>
+                      {isSuperAdmin && (
+                        <button onClick={() => editingRideId === ride.id ? setEditingRideId(null) : startEditRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-t2w-accent/10 px-3 py-2 text-xs text-t2w-accent transition-colors hover:bg-t2w-accent/20">
+                          <Edit3 className="h-3.5 w-3.5" />{editingRideId === ride.id ? "Cancel" : "Edit"}
+                        </button>
+                      )}
+                      {canDeleteRide && (
+                        <button onClick={() => confirmDeleteRide(ride)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
+                          <Trash2 className="h-3.5 w-3.5" />Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Link href={`/ride?id=${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
-                      <Eye className="h-3.5 w-3.5" />View
-                    </Link>
-                    {canDeleteRide && (
-                      <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
-                        <Trash2 className="h-3.5 w-3.5" />Delete
-                      </button>
-                    )}
-                  </div>
+
+                  {/* Inline Edit Form */}
+                  {editingRideId === ride.id && (
+                    <div className="card mt-2 border-t2w-accent/30">
+                      <h3 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                        <Edit3 className="h-4 w-4 text-t2w-accent" />
+                        Edit Ride: {ride.title}
+                      </h3>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" value={editForm.rideNumber} onChange={(e) => setEditForm({ ...editForm, rideNumber: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Status</label><select className="input-field cursor-pointer" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}><option value="upcoming">Upcoming</option><option value="ongoing">Ongoing</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={editForm.difficulty} onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" value={editForm.startLocation} onChange={(e) => setEditForm({ ...editForm, startLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" value={editForm.endLocation} onChange={(e) => setEditForm({ ...editForm, endLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Starting Point</label><input type="text" className="input-field" placeholder="Meetup location" value={editForm.startingPoint} onChange={(e) => setEditForm({ ...editForm, startingPoint: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" value={editForm.distanceKm} onChange={(e) => setEditForm({ ...editForm, distanceKm: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee (₹)</label><input type="number" className="input-field" value={editForm.fee} onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Lead Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.leadRider} onChange={(e) => setEditForm({ ...editForm, leadRider: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Sweep Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.sweepRider} onChange={(e) => setEditForm({ ...editForm, sweepRider: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Organised By</label><input type="text" className="input-field" placeholder="Name" value={editForm.organisedBy} onChange={(e) => setEditForm({ ...editForm, organisedBy: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Meetup Time</label><input type="text" className="input-field" placeholder="e.g. 5:30 AM" value={editForm.meetupTime} onChange={(e) => setEditForm({ ...editForm, meetupTime: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Start Time</label><input type="text" className="input-field" placeholder="e.g. 6:00 AM" value={editForm.rideStartTime} onChange={(e) => setEditForm({ ...editForm, rideStartTime: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Accounts By</label><input type="text" className="input-field" placeholder="Name" value={editForm.accountsBy} onChange={(e) => setEditForm({ ...editForm, accountsBy: e.target.value })} /></div>
+                        <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
+                        <div className="sm:col-span-2 lg:col-span-3">
+                          <label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Highlights <span className="text-xs text-t2w-muted">(one per line)</span></label>
+                          <textarea rows={4} className="input-field resize-none" placeholder={"Scenic coastal roads\nBreakfast at local cafe\nSunrise viewpoint stop\nGroup photo at destination"} value={editForm.highlights} onChange={(e) => setEditForm({ ...editForm, highlights: e.target.value })} />
+                          {editForm.highlights.trim() && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {editForm.highlights.split("\n").filter((h) => h.trim()).map((h, i) => (
+                                <span key={i} className="rounded-lg bg-t2w-accent/10 px-2.5 py-1 text-xs text-t2w-accent">{h.trim()}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
+                          <button onClick={saveEditRide} disabled={savingEdit} className="btn-primary flex items-center gap-2">
+                            {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            {savingEdit ? "Saving..." : "Save Changes"}
+                          </button>
+                          <button onClick={() => setEditingRideId(null)} className="rounded-xl px-5 py-2.5 text-sm font-medium text-gray-300 transition-all hover:bg-white/5 hover:text-white">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -848,7 +1180,251 @@ export function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── Form Settings Tab (SuperAdmin) ── */}
+        {activeTab === "form-settings" && isSuperAdmin && (
+          <div>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold text-white">Registration Form Settings</h3>
+                <p className="mt-1 text-sm text-t2w-muted">Customize the ride registration form fields, policies, and payment details</p>
+              </div>
+              <button
+                onClick={saveFormSettings}
+                disabled={savingFormSettings}
+                className="btn-primary flex items-center gap-2"
+              >
+                {savingFormSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingFormSettings ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
+
+            {!formSettingsLoaded ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-t2w-accent" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Toggle Form Fields */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <Edit3 className="h-5 w-5 text-t2w-accent" />
+                    Toggle Form Fields
+                  </h4>
+                  <p className="mb-4 text-sm text-t2w-muted">Show or hide optional fields on the registration form. Required fields (name, email, phone, blood group, food, riding type) cannot be hidden.</p>
+                  <div className="space-y-3">
+                    {[
+                      { key: "address", label: "Address", desc: "Full address field" },
+                      { key: "referredBy", label: "Referred By", desc: "Who referred the rider to T2W" },
+                      { key: "vehicle", label: "Vehicle Details", desc: "Vehicle model and registration number" },
+                    ].map((field) => (
+                      <div key={field.key} className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">{field.label}</p>
+                          <p className="text-xs text-t2w-muted">{field.desc}</p>
+                        </div>
+                        <button onClick={() => toggleHiddenField(field.key)} className="text-t2w-accent">
+                          {formSettings.hiddenFields.includes(field.key) ? (
+                            <ToggleLeft className="h-8 w-8 text-t2w-muted" />
+                          ) : (
+                            <ToggleRight className="h-8 w-8 text-t2w-accent" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cancellation & Refund Text */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <FileText className="h-5 w-5 text-t2w-accent" />
+                    Cancellation & Refund Policy
+                  </h4>
+                  <p className="mb-3 text-sm text-t2w-muted">
+                    Edit the cancellation text shown to riders during registration. Use <code className="rounded bg-t2w-surface-light px-1.5 py-0.5 text-xs text-t2w-accent">__text__</code> for bold headings and numbered lines for policy points.
+                  </p>
+                  <textarea
+                    rows={6}
+                    className="input-field font-mono text-sm"
+                    value={formSettings.cancellationText}
+                    onChange={(e) => setFormSettings({ ...formSettings, cancellationText: e.target.value })}
+                    placeholder="Enter cancellation and refund policy text..."
+                  />
+                </div>
+
+                {/* Payment Details */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <TrendingUp className="h-5 w-5 text-t2w-accent" />
+                    Payment Details
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-300">UPI ID</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="e.g. taleson2wheels@upi"
+                        value={formSettings.upiId}
+                        onChange={(e) => setFormSettings({ ...formSettings, upiId: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-300">Bank Transfer Details</label>
+                      <textarea
+                        rows={3}
+                        className="input-field text-sm"
+                        placeholder="Account Name, Account No, IFSC, etc."
+                        value={formSettings.bankDetails}
+                        onChange={(e) => setFormSettings({ ...formSettings, bankDetails: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="card border-t2w-accent/20">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <Eye className="h-5 w-5 text-t2w-accent" />
+                    Cancellation Text Preview
+                  </h4>
+                  <div className="rounded-xl border border-t2w-border bg-t2w-bg p-4 text-sm text-t2w-muted leading-relaxed whitespace-pre-line">
+                    {formSettings.cancellationText.split("\n").map((line, i) => {
+                      if (line.startsWith("__") && line.endsWith("__")) return <p key={i} className="mt-2 font-semibold text-t2w-accent">{line.replace(/__/g, "")}</p>;
+                      if (/^\d+\./.test(line)) return <p key={i} className="ml-3 mt-1 text-gray-300"><span className="text-t2w-accent font-medium">{line.split(":")[0]}:</span>{line.includes(":") ? line.slice(line.indexOf(":") + 1) : ""}</p>;
+                      return <p key={i} className={i > 0 ? "mt-1" : ""}>{line}</p>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Activity Tab - Super Admin only */}
+        {activeTab === "activity" && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="card">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-display text-xl font-bold text-white">
+                  <Activity className="h-5 w-5 text-t2w-accent" />
+                  Activity Log
+                </h3>
+                <p className="text-xs text-t2w-muted">{activityLog.length} entries</p>
+              </div>
+              {activityLog.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Clock className="mx-auto h-12 w-12 text-t2w-border" />
+                  <p className="mt-3 text-t2w-muted">No activity logged yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activityLog.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-4 rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        entry.action.includes("deleted") || entry.action.includes("rejected")
+                          ? "bg-red-400/10 text-red-400"
+                          : entry.action.includes("approved") || entry.action.includes("created")
+                          ? "bg-green-400/10 text-green-400"
+                          : entry.action.includes("edited") || entry.action.includes("changed") || entry.action.includes("saved")
+                          ? "bg-blue-400/10 text-blue-400"
+                          : "bg-t2w-accent/10 text-t2w-accent"
+                      }`}>
+                        {entry.action.includes("deleted") ? <Trash2 className="h-4 w-4" /> :
+                         entry.action.includes("approved") ? <CheckCircle className="h-4 w-4" /> :
+                         entry.action.includes("rejected") ? <XCircle className="h-4 w-4" /> :
+                         entry.action.includes("created") ? <Plus className="h-4 w-4" /> :
+                         entry.action.includes("edited") || entry.action.includes("changed") ? <Edit3 className="h-4 w-4" /> :
+                         <Settings className="h-4 w-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white">
+                          {entry.details}
+                          {entry.details?.includes("[ROLLED BACK]") && (
+                            <span className="ml-2 rounded bg-yellow-400/10 px-1.5 py-0.5 text-xs text-yellow-400">Rolled Back</span>
+                          )}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-t2w-muted">
+                          <span>by {entry.performedByName}</span>
+                          <span>&middot;</span>
+                          <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {entry.rollbackData !== undefined && entry.rollbackData !== null && !entry.details?.includes("[ROLLED BACK]") && (
+                        <button
+                          onClick={async () => {
+                            if (rollingBack) return;
+                            setRollingBack(entry.id);
+                            try {
+                              await api.activityLog.rollback(entry.id);
+                              const data = await api.activityLog.list();
+                              setActivityLog(data.entries);
+                              // Refresh relevant data
+                              const [usersData, ridesData] = await Promise.all([
+                                api.users.list("status=active").catch(() => null),
+                                api.rides.list().catch(() => null),
+                              ]);
+                              if (usersData) setAllUsers((usersData as { users: AllUser[] }).users);
+                              if (ridesData) setRides((ridesData as { rides: AdminRide[] }).rides);
+                            } catch (err) {
+                              console.error("Rollback failed:", err);
+                            } finally {
+                              setRollingBack(null);
+                            }
+                          }}
+                          disabled={rollingBack === entry.id}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-yellow-400/10 px-3 py-2 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-400/20 disabled:opacity-50"
+                          title="Rollback this action"
+                        >
+                          {rollingBack === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                          Rollback
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-t2w-border bg-t2w-surface p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-400/10">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <h3 className="font-display text-lg font-bold text-white">Confirm Delete</h3>
+            </div>
+            <p className="mb-6 text-sm text-t2w-muted">
+              Are you sure you want to delete <span className="font-semibold text-white">{deleteConfirm.name}</span>?
+              {isSuperAdmin && " You can rollback this action from the Activity tab."}
+              {!isSuperAdmin && " This action cannot be undone."}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-xl border border-t2w-border bg-t2w-surface-light px-4 py-2.5 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteConfirm.type === "ride") executeDeleteRide();
+                  else if (deleteConfirm.type === "user") executeDeleteUser();
+                  else if (deleteConfirm.type === "bulk-users") executeDeleteBulkUsers();
+                }}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

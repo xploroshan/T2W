@@ -63,7 +63,7 @@ function EventSchemas() {
         ride.registeredRiders < ride.maxRiders
           ? "https://schema.org/InStock"
           : "https://schema.org/SoldOut",
-      url: `https://taleson2wheels.com/ride?id=${ride.id}`,
+      url: `https://taleson2wheels.com/ride/${ride.id}`,
       validFrom: "2026-01-01",
     },
     maximumAttendeeCapacity: ride.maxRiders,

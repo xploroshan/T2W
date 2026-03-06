@@ -49,17 +49,32 @@ export function RidesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   useEffect(() => {
-    api.rides
-      .list()
-      .then((data: any) => {
-        setRides(data.rides);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch rides:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const fetchRides = () => {
+      api.rides
+        .list()
+        .then((data: any) => {
+          setRides(data.rides);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch rides:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+    fetchRides();
+    // Re-fetch when ride data changes (e.g., admin edits in another tab)
+    const handleStorageUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.key === "t2w_custom_rides") fetchRides();
+    };
+    window.addEventListener("t2w-storage-update", handleStorageUpdate);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "t2w_custom_rides") fetchRides();
+    });
+    return () => {
+      window.removeEventListener("t2w-storage-update", handleStorageUpdate);
+    };
   }, []);
 
   const filtered = rides
@@ -232,7 +247,7 @@ export function RidesPage() {
             {filtered.map((ride) => (
               <Link
                 key={ride.id}
-                href={`/ride?id=${ride.id}`}
+                href={`/ride/${ride.id}`}
                 className="card-interactive group relative overflow-hidden"
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-t2w-accent to-t2w-gold opacity-0 transition-opacity group-hover:opacity-100" />
@@ -358,7 +373,7 @@ export function RidesPage() {
                     <td className="px-6 py-4">
                       <div>
                         <Link
-                          href={`/ride?id=${ride.id}`}
+                          href={`/ride/${ride.id}`}
                           className="font-semibold text-white hover:text-t2w-accent transition-colors"
                         >
                           {ride.title}
@@ -393,7 +408,7 @@ export function RidesPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link
-                        href={`/ride?id=${ride.id}`}
+                        href={`/ride/${ride.id}`}
                         className="text-sm font-medium text-t2w-accent hover:text-t2w-accent/80 transition-colors"
                       >
                         View Details →

@@ -27,6 +27,7 @@ import {
   Car,
   FileText,
   XCircle,
+  ChevronDown,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
@@ -37,7 +38,7 @@ import type { RidePost } from "@/types";
 function getRiderLink(name: string): string | null {
   if (!name) return null;
   const key = name.toLowerCase().trim();
-  return riderNameToId[key] ? `/rider?id=${riderNameToId[key]}` : null;
+  return riderNameToId[key] ? `/rider/${riderNameToId[key]}` : null;
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -90,15 +91,23 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   // Registration form state
   const [regForm, setRegForm] = useState({
     riderName: "",
+    address: "",
     email: "",
     phone: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
     bloodGroup: "",
+    referredBy: "",
+    foodPreference: "" as "vegetarian" | "non-vegetarian" | "",
+    ridingType: "" as "solo" | "rider-with-pillion" | "pillion-rider" | "",
     vehicleModel: "",
     vehicleRegNumber: "",
+    agreedCancellationTerms: false,
     agreedIndemnity: false,
+    paymentScreenshot: "",
   });
+  const paymentInputRef = useRef<HTMLInputElement>(null);
+  const [formSettings, setFormSettings] = useState<Record<string, unknown>>({});
 
   // Ride posts
   const [ridePosts, setRidePosts] = useState<RidePost[]>([]);
@@ -117,6 +126,17 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       }));
     }
   }, [user]);
+
+  // Load admin-configured form settings
+  useEffect(() => {
+    api.regFormSettings.get().then((s) => setFormSettings(s));
+  }, []);
+
+  const cancellationText = (formSettings.cancellationText as string) ||
+    "Post registration, if you cancel\n1. Partial Refund: If the stay owner waives the booking charge or if a replacement rider is found, a cancellation fee of \u20B9500 will be deducted and the remaining amount will be refunded to you.\n2. No Refund: If a replacement rider is not available and the stay owner charges for your reserved slot, we will be unable to offer a refund.";
+  const upiId = (formSettings.upiId as string) || "taleson2wheels@upi";
+  const bankDetails = (formSettings.bankDetails as string) || "Contact admin for details";
+  const hiddenFields = (formSettings.hiddenFields as string[]) || [];
 
   const [posterUploading, setPosterUploading] = useState(false);
 
@@ -206,9 +226,20 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     };
   }, [rideId]);
 
+  const handlePaymentScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setRegForm({ ...regForm, paymentScreenshot: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleRegister = async () => {
-    if (!regForm.agreedIndemnity || registering) return;
-    if (!regForm.riderName || !regForm.email || !regForm.phone) {
+    if (!regForm.agreedIndemnity || !regForm.agreedCancellationTerms || registering) return;
+    if (!regForm.riderName || !regForm.address || !regForm.email || !regForm.phone || !regForm.foodPreference || !regForm.ridingType) {
       alert("Please fill in all required fields");
       return;
     }
@@ -529,7 +560,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     return riderId ? (
                       <Link
                         key={`${riderName}-${index}`}
-                        href={`/rider?id=${riderId}`}
+                        href={`/rider/${riderId}`}
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
@@ -696,237 +727,12 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                       </p>
                     </div>
 
-                    {!showRegistration ? (
-                      <button
-                        onClick={() => setShowRegistration(true)}
-                        className="btn-primary w-full"
-                      >
-                        Register Now
-                      </button>
-                    ) : (
-                      <div className="space-y-3">
-                        {/* Registration Form */}
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Rider Name *
-                          </label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <input
-                              type="text"
-                              required
-                              className="input-field !pl-9 !py-2 text-sm"
-                              value={regForm.riderName}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  riderName: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Email *
-                          </label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <input
-                              type="email"
-                              required
-                              className="input-field !pl-9 !py-2 text-sm"
-                              value={regForm.email}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  email: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Phone *
-                          </label>
-                          <div className="relative">
-                            <Phone className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <input
-                              type="tel"
-                              required
-                              className="input-field !pl-9 !py-2 text-sm"
-                              value={regForm.phone}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  phone: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="mb-1 block text-xs text-t2w-muted">
-                              Emergency Contact
-                            </label>
-                            <input
-                              type="text"
-                              className="input-field !py-2 text-sm"
-                              placeholder="Name"
-                              value={regForm.emergencyContactName}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  emergencyContactName: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-t2w-muted">
-                              Emergency Phone
-                            </label>
-                            <input
-                              type="tel"
-                              className="input-field !py-2 text-sm"
-                              placeholder="Phone"
-                              value={regForm.emergencyContactPhone}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  emergencyContactPhone: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Blood Group
-                          </label>
-                          <div className="relative">
-                            <Droplets className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <select
-                              className="input-field !pl-9 !py-2 text-sm cursor-pointer"
-                              value={regForm.bloodGroup}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  bloodGroup: e.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Select</option>
-                              <option value="A+">A+</option>
-                              <option value="A-">A-</option>
-                              <option value="B+">B+</option>
-                              <option value="B-">B-</option>
-                              <option value="AB+">AB+</option>
-                              <option value="AB-">AB-</option>
-                              <option value="O+">O+</option>
-                              <option value="O-">O-</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Vehicle Model
-                          </label>
-                          <div className="relative">
-                            <Bike className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <input
-                              type="text"
-                              className="input-field !pl-9 !py-2 text-sm"
-                              placeholder="e.g. Royal Enfield Himalayan 450"
-                              value={regForm.vehicleModel}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  vehicleModel: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-t2w-muted">
-                            Vehicle Reg. Number
-                          </label>
-                          <div className="relative">
-                            <Car className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
-                            <input
-                              type="text"
-                              className="input-field !pl-9 !py-2 text-sm"
-                              placeholder="e.g. KA 01 AB 1234"
-                              value={regForm.vehicleRegNumber}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  vehicleRegNumber: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        {/* Indemnity Agreement */}
-                        <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-3">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400" />
-                            <div>
-                              <h4 className="text-xs font-semibold text-yellow-400">
-                                Indemnity Agreement
-                              </h4>
-                              <p className="mt-1 text-xs text-t2w-muted leading-relaxed">
-                                I understand that motorcycle riding involves
-                                inherent risks. I voluntarily participate and
-                                assume all risks. I release T2W from liability
-                                for any injury or damage. I confirm I hold a
-                                valid driving license and insurance.
-                              </p>
-                            </div>
-                          </div>
-                          <label className="mt-2 flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={regForm.agreedIndemnity}
-                              onChange={(e) =>
-                                setRegForm({
-                                  ...regForm,
-                                  agreedIndemnity: e.target.checked,
-                                })
-                              }
-                              className="h-4 w-4 rounded border-t2w-border accent-t2w-accent"
-                            />
-                            <span className="text-xs text-gray-300">
-                              I agree to the indemnity terms
-                            </span>
-                          </label>
-                        </div>
-
-                        <button
-                          disabled={!regForm.agreedIndemnity || registering}
-                          onClick={handleRegister}
-                          className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                            regForm.agreedIndemnity && !registering
-                              ? "btn-primary"
-                              : "cursor-not-allowed bg-t2w-surface-light text-t2w-muted"
-                          }`}
-                        >
-                          {registering
-                            ? "Processing..."
-                            : `Confirm & Pay ₹${ride.fee.toLocaleString()}`}
-                        </button>
-                      </div>
-                    )}
+                    <button
+                      onClick={() => setShowRegistration(true)}
+                      className="btn-primary w-full"
+                    >
+                      Register Now
+                    </button>
                   </>
                 ) : (
                   <div className="rounded-xl bg-red-400/10 p-4 text-center">
@@ -935,6 +741,291 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Registration Modal - Single Scrollable Form */}
+            {showRegistration && user && (
+              <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-10 pb-10">
+                <div className="relative w-full max-w-2xl rounded-2xl border border-t2w-border bg-t2w-surface">
+                  {/* Modal Header */}
+                  <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-t2w-border bg-t2w-surface px-6 py-4">
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-white">Ride Registration</h2>
+                      <p className="text-xs text-t2w-muted">{ride.title}</p>
+                    </div>
+                    <button onClick={() => setShowRegistration(false)} className="rounded-lg p-2 text-t2w-muted transition-colors hover:bg-white/10 hover:text-white">
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6 p-6">
+                    {/* ── Section 1: Personal Details ── */}
+                    <div>
+                      <h3 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                        <User className="h-5 w-5 text-t2w-accent" />
+                        Personal Details
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium text-gray-300">Rider Name <span className="text-red-400">*</span></label>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                            <input type="text" required className="input-field !pl-10" placeholder="Your full name" value={regForm.riderName} onChange={(e) => setRegForm({ ...regForm, riderName: e.target.value })} />
+                          </div>
+                        </div>
+
+                        {!hiddenFields.includes("address") && (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Address <span className="text-red-400">*</span></label>
+                            <textarea required rows={2} className="input-field text-sm" placeholder="Enter your COMPLETE address" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })} />
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Email <span className="text-red-400">*</span></label>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                              <input type="email" required className="input-field !pl-10" placeholder="rider@example.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Phone / WhatsApp <span className="text-red-400">*</span></label>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                              <input type="tel" required className="input-field !pl-10" placeholder="Your mobile number" value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Emergency Contact (Name & Relation) <span className="text-red-400">*</span></label>
+                            <input type="text" required className="input-field" placeholder="e.g. John Doe (Brother)" value={regForm.emergencyContactName} onChange={(e) => setRegForm({ ...regForm, emergencyContactName: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Emergency Contact No. <span className="text-red-400">*</span></label>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                              <input type="tel" required className="input-field !pl-10" placeholder="Emergency phone number" value={regForm.emergencyContactPhone} onChange={(e) => setRegForm({ ...regForm, emergencyContactPhone: e.target.value })} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Blood Group <span className="text-red-400">*</span></label>
+                            <div className="relative">
+                              <Droplets className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                              <select required className="input-field !pl-10 cursor-pointer" value={regForm.bloodGroup} onChange={(e) => setRegForm({ ...regForm, bloodGroup: e.target.value })}>
+                                <option value="">Select</option>
+                                <option value="A+">A+</option><option value="A-">A-</option>
+                                <option value="B+">B+</option><option value="B-">B-</option>
+                                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                <option value="O+">O+</option><option value="O-">O-</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Food Preference <span className="text-red-400">*</span></label>
+                            <select required className="input-field cursor-pointer" value={regForm.foodPreference} onChange={(e) => setRegForm({ ...regForm, foodPreference: e.target.value as "vegetarian" | "non-vegetarian" })}>
+                              <option value="">Select</option>
+                              <option value="vegetarian">Vegetarian</option>
+                              <option value="non-vegetarian">Non-Vegetarian</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Riding Type <span className="text-red-400">*</span></label>
+                            <select required className="input-field cursor-pointer" value={regForm.ridingType} onChange={(e) => setRegForm({ ...regForm, ridingType: e.target.value as "solo" | "rider-with-pillion" | "pillion-rider" })}>
+                              <option value="">Select</option>
+                              <option value="solo">Solo Rider</option>
+                              <option value="rider-with-pillion">Rider with Pillion</option>
+                              <option value="pillion-rider">Pillion Rider</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {!hiddenFields.includes("referredBy") && (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">Referred By</label>
+                            <input type="text" className="input-field" placeholder="If riding for the first time with us" value={regForm.referredBy} onChange={(e) => setRegForm({ ...regForm, referredBy: e.target.value })} />
+                          </div>
+                        )}
+
+                        {!hiddenFields.includes("vehicle") && (
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Model</label>
+                              <div className="relative">
+                                <Bike className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                                <input type="text" className="input-field !pl-10" placeholder="e.g. Royal Enfield Himalayan 450" value={regForm.vehicleModel} onChange={(e) => setRegForm({ ...regForm, vehicleModel: e.target.value })} />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Reg. Number</label>
+                              <div className="relative">
+                                <Car className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                                <input type="text" className="input-field !pl-10" placeholder="e.g. KA 01 AB 1234" value={regForm.vehicleRegNumber} onChange={(e) => setRegForm({ ...regForm, vehicleRegNumber: e.target.value })} />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <hr className="border-t2w-border" />
+
+                    {/* ── Section 2: Cancellation & Refund ── */}
+                    <div>
+                      <h3 className="mb-3 flex items-center gap-2 font-display text-base font-bold text-white">
+                        <FileText className="h-5 w-5 text-t2w-accent" />
+                        Cancellation and Refund Terms
+                      </h3>
+                      <div className="rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                        <div className="whitespace-pre-line text-sm text-t2w-muted leading-relaxed">
+                          {cancellationText.split("\n").map((line, i) => {
+                            if (line.startsWith("__") && line.endsWith("__")) return <p key={i} className="mt-2 font-semibold text-t2w-accent">{line.replace(/__/g, "")}</p>;
+                            if (/^\d+\./.test(line)) return <p key={i} className="ml-3 mt-1 text-gray-300"><span className="text-t2w-accent font-medium">{line.split(":")[0]}:</span>{line.includes(":") ? line.slice(line.indexOf(":") + 1) : ""}</p>;
+                            return <p key={i} className={i > 0 ? "mt-1" : ""}>{line}</p>;
+                          })}
+                        </div>
+                      </div>
+                      <label className="mt-3 flex items-center gap-3 cursor-pointer rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
+                        <input type="checkbox" checked={regForm.agreedCancellationTerms} onChange={(e) => setRegForm({ ...regForm, agreedCancellationTerms: e.target.checked })} className="h-5 w-5 shrink-0 rounded border-t2w-border accent-t2w-accent" />
+                        <span className="text-sm text-gray-300">I agree to the Cancellation and Refund Terms <span className="text-red-400">*</span></span>
+                      </label>
+                    </div>
+
+                    <hr className="border-t2w-border" />
+
+                    {/* ── Section 3: Payment ── */}
+                    <div>
+                      <h3 className="mb-3 flex items-center gap-2 font-display text-base font-bold text-white">
+                        <IndianRupee className="h-5 w-5 text-t2w-accent" />
+                        Payment Details
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-xl bg-t2w-accent/10 p-4">
+                          <span className="text-sm text-t2w-muted">Registration Fee</span>
+                          <span className="font-display text-2xl font-bold text-t2w-accent">₹{ride.fee.toLocaleString()}</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="rounded-lg bg-t2w-surface-light p-3">
+                            <p className="mb-1 text-sm font-medium text-gray-300">Pay via UPI</p>
+                            <p className="font-mono text-t2w-accent">{upiId}</p>
+                          </div>
+                          <div className="rounded-lg bg-t2w-surface-light p-3">
+                            <p className="mb-1 text-sm font-medium text-gray-300">Bank Transfer</p>
+                            <p className="text-xs text-t2w-muted">{bankDetails}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-sm font-medium text-gray-300">Attach Payment Screenshot</label>
+                          <input ref={paymentInputRef} type="file" accept="image/*" onChange={handlePaymentScreenshot} className="hidden" />
+                          <button onClick={() => paymentInputRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-t2w-border bg-t2w-bg px-4 py-4 text-sm text-t2w-muted transition-colors hover:border-t2w-accent/50 hover:text-gray-300">
+                            <ImagePlus className="h-5 w-5" />
+                            {regForm.paymentScreenshot ? "Screenshot attached - click to change" : "Click to upload payment screenshot"}
+                          </button>
+                          {regForm.paymentScreenshot && (
+                            <div className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-green-400/30 bg-green-400/5 p-2">
+                              <CheckCircle className="h-4 w-4 text-green-400" />
+                              <p className="text-xs text-green-400">Payment screenshot attached</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <hr className="border-t2w-border" />
+
+                    {/* ── Section 4: Acknowledgement & Indemnity ── */}
+                    <div>
+                      <h3 className="mb-3 flex items-center gap-2 font-display text-base font-bold text-yellow-400">
+                        <AlertTriangle className="h-5 w-5" />
+                        Acknowledgement & Indemnity
+                      </h3>
+
+                      <div className="space-y-3">
+                        <details className="group rounded-xl border border-yellow-400/20 bg-yellow-400/5">
+                          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-yellow-400 flex items-center justify-between">
+                            Acknowledgement of Risk, Danger and Obligations (16 points)
+                            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="border-t border-yellow-400/10 px-4 py-3">
+                            <ol className="ml-4 list-decimal space-y-1.5 text-xs text-t2w-muted leading-relaxed">
+                              <li>I acknowledge that motorcycle riding is inherently dangerous and involves risks of serious injury, permanent disability, or death.</li>
+                              <li>I am aware that participating in group rides increases the complexity and risk of riding.</li>
+                              <li>I confirm that I hold a valid driving license appropriate for the vehicle I will be operating.</li>
+                              <li>I confirm that my vehicle is in roadworthy condition with valid insurance, registration, and pollution certificate.</li>
+                              <li>I will wear proper riding gear including a helmet (ISI/DOT certified), riding jacket, gloves, riding pants, and boots at all times during the ride.</li>
+                              <li>I will follow all traffic rules and regulations as per the Motor Vehicles Act of India.</li>
+                              <li>I will adhere to the riding formation, speed limits, and guidelines set by T2W ride captains.</li>
+                              <li>I understand that alcohol, drugs, or any intoxicating substances are strictly prohibited before and during the ride.</li>
+                              <li>I will not engage in stunting, racing, or reckless riding during the event.</li>
+                              <li>I acknowledge that T2W ride captains have the authority to remove any participant who endangers themselves or others.</li>
+                              <li>I understand that weather, road, or other conditions may cause route changes or ride cancellations at T2W&apos;s discretion.</li>
+                              <li>I am medically fit to participate in this ride and have disclosed any medical conditions to the organizers.</li>
+                              <li>I will carry my own basic first aid kit and any prescribed medications.</li>
+                              <li>I understand that mobile phone use while riding is prohibited.</li>
+                              <li>I will maintain adequate fuel levels and plan fuel stops as communicated by ride captains.</li>
+                              <li>I accept full responsibility for my pillion rider (if applicable) and ensure they also wear proper safety gear.</li>
+                            </ol>
+                          </div>
+                        </details>
+
+                        <details className="group rounded-xl border border-red-400/20 bg-red-400/5">
+                          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-red-400 flex items-center justify-between">
+                            Indemnity Given to Organisers (12 points)
+                            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="border-t border-red-400/10 px-4 py-3">
+                            <ol className="ml-4 list-decimal space-y-1.5 text-xs text-t2w-muted leading-relaxed">
+                              <li>I voluntarily assume all risks associated with participating in this motorcycle ride organized by Tales on 2 Wheels (T2W).</li>
+                              <li>I hereby release, discharge, and hold harmless T2W, its organizers, ride captains, volunteers, sponsors, and affiliates from any and all liability, claims, demands, and causes of action.</li>
+                              <li>This release applies to any injury, illness, death, or property damage that may occur during the ride, including during transit to and from the ride location.</li>
+                              <li>I understand that T2W does not provide insurance coverage for participants and that I am responsible for my own health, life, and vehicle insurance.</li>
+                              <li>I agree not to hold T2W responsible for any mechanical failure, accident, theft, or loss of personal belongings during the ride.</li>
+                              <li>I consent to receiving emergency medical treatment if necessary and agree to bear all associated costs.</li>
+                              <li>I grant T2W permission to use photographs, videos, and other media captured during the ride for promotional purposes without compensation.</li>
+                              <li>I confirm that I am participating in this ride of my own free will and have not been coerced.</li>
+                              <li>I understand that this indemnity agreement is binding and applies to all rides I participate in under T2W until revoked in writing.</li>
+                              <li>I agree to indemnify and hold harmless T2W against any third-party claims arising from my actions during the ride.</li>
+                              <li>I acknowledge that I have read, understood, and agree to all the terms mentioned in this document.</li>
+                              <li>I understand that providing false information in this registration form may result in disqualification from the ride without refund.</li>
+                            </ol>
+                          </div>
+                        </details>
+                      </div>
+
+                      <label className="mt-3 flex items-center gap-3 cursor-pointer rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+                        <input type="checkbox" checked={regForm.agreedIndemnity} onChange={(e) => setRegForm({ ...regForm, agreedIndemnity: e.target.checked })} className="h-5 w-5 shrink-0 rounded border-t2w-border accent-t2w-accent" />
+                        <span className="text-sm text-gray-300">I have read and agree to all the Acknowledgement and Indemnity terms above <span className="text-red-400">*</span></span>
+                      </label>
+                    </div>
+
+                    <hr className="border-t2w-border" />
+
+                    {/* Submit */}
+                    <button
+                      disabled={!regForm.agreedIndemnity || !regForm.agreedCancellationTerms || !regForm.paymentScreenshot || registering}
+                      onClick={handleRegister}
+                      className={`w-full rounded-xl py-3.5 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                        regForm.agreedIndemnity && regForm.agreedCancellationTerms && regForm.paymentScreenshot && !registering
+                          ? "btn-primary"
+                          : "cursor-not-allowed bg-t2w-surface-light text-t2w-muted"
+                      }`}
+                    >
+                      {registering ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                      ) : !regForm.paymentScreenshot ? (
+                        <><ImagePlus className="h-4 w-4" /> Upload payment screenshot to submit</>
+                      ) : (
+                        <><CheckCircle className="h-4 w-4" /> Submit Registration</>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
