@@ -34,6 +34,8 @@ function getStorage<T>(key: string, fallback: T): T {
 function setStorage(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
+  // Dispatch a custom event so other components/tabs can react to data changes
+  window.dispatchEvent(new CustomEvent("t2w-storage-update", { detail: { key } }));
 }
 
 // ── Storage keys ──
@@ -48,6 +50,7 @@ const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
 const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
 const ACTIVITY_LOG_KEY = "t2w_activity_log";
+const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -359,18 +362,7 @@ export const api = {
       return buildUserData(found);
     },
 
-    // Social / email-only login (Google, Facebook simulation)
-    loginByEmail: async (email: string) => {
-      await delay(300);
-      const users = getRegisteredUsers();
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => u.email.toLowerCase() === emailLower);
-      if (!found) throw new Error("NO_ACCOUNT");
-      setStorage(AUTH_KEY, found.id);
-      return buildUserData(found);
-    },
-
-    // Forgot password - generates a temp password and returns it
+    // Forgot password - generates a temp password and "emails" it (simulated)
     resetPassword: async (email: string) => {
       await delay(400);
       const users = getRegisteredUsers();
@@ -383,7 +375,9 @@ export const api = {
       const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
       overrides[emailLower] = tempPassword;
       setStorage(PASSWORDS_KEY, overrides);
-      return { success: true, tempPassword };
+      // In production, this would send an email. For now, log to console for debugging.
+      console.info(`[T2W] Password reset email sent to ${email}. (Dev: ${tempPassword})`);
+      return { success: true, email: emailLower };
     },
 
     // Change password (after reset or voluntarily)
@@ -394,6 +388,48 @@ export const api = {
       overrides[emailLower] = newPassword;
       setStorage(PASSWORDS_KEY, overrides);
       return { success: true };
+    },
+
+    // Send OTP to email for verification (simulated)
+    sendOtp: async (email: string) => {
+      await delay(300);
+      const emailLower = email.toLowerCase().trim();
+      if (!emailLower || !emailLower.includes("@")) {
+        throw new Error("Please enter a valid email address");
+      }
+      // Check if email already registered
+      const users = getRegisteredUsers();
+      if (users.find((u) => u.email.toLowerCase() === emailLower)) {
+        throw new Error("An account with this email already exists");
+      }
+      // Generate 6-digit OTP
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(EMAIL_OTP_KEY, otps);
+      // In production, this would send a real email
+      console.info(`[T2W] OTP for ${email}: ${code}`);
+      return { success: true, message: `Verification code sent to ${email}` };
+    },
+
+    // Verify OTP code
+    verifyOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No verification code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(EMAIL_OTP_KEY, otps);
+        throw new Error("Verification code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid verification code. Please try again.");
+      // Mark as verified by removing from pending
+      delete otps[emailLower];
+      setStorage(EMAIL_OTP_KEY, otps);
+      return { success: true, verified: true };
     },
 
     register: async (data: Record<string, unknown>) => {

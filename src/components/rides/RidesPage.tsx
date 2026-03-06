@@ -49,17 +49,32 @@ export function RidesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   useEffect(() => {
-    api.rides
-      .list()
-      .then((data: any) => {
-        setRides(data.rides);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch rides:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const fetchRides = () => {
+      api.rides
+        .list()
+        .then((data: any) => {
+          setRides(data.rides);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch rides:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+    fetchRides();
+    // Re-fetch when ride data changes (e.g., admin edits in another tab)
+    const handleStorageUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.key === "t2w_custom_rides") fetchRides();
+    };
+    window.addEventListener("t2w-storage-update", handleStorageUpdate);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "t2w_custom_rides") fetchRides();
+    });
+    return () => {
+      window.removeEventListener("t2w-storage-update", handleStorageUpdate);
+    };
   }, []);
 
   const filtered = rides
