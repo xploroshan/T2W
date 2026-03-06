@@ -308,7 +308,8 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={openForgotModal}
-                className="text-sm text-t2w-accent hover:text-t2w-accent/80 transition-colors"
+                disabled={!email || !email.includes("@")}
+                className="text-sm text-t2w-accent hover:text-t2w-accent/80 transition-colors disabled:text-t2w-muted disabled:cursor-not-allowed"
               >
                 Forgot password?
               </button>

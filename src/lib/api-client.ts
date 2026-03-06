@@ -15,7 +15,6 @@ import {
   type RiderProfile,
 } from "@/data/rider-profiles";
 import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
-import { sendPasswordResetEmail } from "@/lib/email";
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -43,6 +42,7 @@ function setStorage(key: string, value: unknown) {
 const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
 const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
+const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
 const RIDE_REG_KEY = "t2w_ride_registrations";
 const NOTIF_KEY = "t2w_notif_read";
 const BLOGS_KEY = "t2w_blogs";
@@ -51,6 +51,8 @@ const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
 const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
 const ACTIVITY_LOG_KEY = "t2w_activity_log";
+const ABOUT_CONTENT_KEY = "t2w_about_content"; // editable About T2W content
+const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across users)
 const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
 const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
 const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
@@ -243,7 +245,15 @@ function getRegisteredUsers(): StoredUser[] {
   const customUsers = stored.filter(
     (u) => !builtinEmails.has(u.email.toLowerCase())
   );
-  return [...builtinUsers, ...customUsers];
+  // Apply role overrides (persisted by SuperAdmin role changes)
+  const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+  const allUsers = [...builtinUsers, ...customUsers];
+  for (const user of allUsers) {
+    if (roleOverrides[user.id]) {
+      user.role = roleOverrides[user.id];
+    }
+  }
+  return allUsers;
 }
 
 function saveCustomUsers(users: StoredUser[]) {
@@ -393,10 +403,20 @@ export const api = {
       const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
       otps[emailLower] = { code, expiresAt };
       setStorage(RESET_OTP_KEY, otps);
-      // Send OTP via email (EmailJS)
-      const emailSent = await sendPasswordResetEmail(emailLower, found.name, code);
+      // Send OTP via server-side API route (nodemailer)
+      let emailSent = false;
+      try {
+        const res = await fetch("/api/auth/send-reset-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
+        });
+        const data = await res.json();
+        emailSent = data.emailSent === true;
+      } catch {
+        // API route unavailable (e.g. static export) – fall through
+      }
       if (!emailSent) {
-        // EmailJS not configured – for dev/demo, log code to console
         console.info(`[T2W-DEV] Password reset OTP for ${emailLower}: ${code}`);
       }
       return { success: true, emailSent };
@@ -686,9 +706,14 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only)
+    // Change role (SuperAdmin only) – persisted via role overrides map
     changeRole: async (id: string, newRole: UserRole) => {
       await delay(200);
+      // Persist the role override for ALL user types (built-in, custom, static)
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+      roleOverrides[id] = newRole;
+      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+      // Also update custom users if they exist there
       const users = getRegisteredUsers();
       const user = users.find((u) => u.id === id);
       if (user) {
@@ -696,7 +721,7 @@ export const api = {
         saveCustomUsers(users);
       } else {
         // User may exist only in static data (riderProfiles/mockAllUsers).
-        // Create a custom record so the role change persists.
+        // Create a custom record so the user shows up in queries.
         const staticUser = mockAllUsers.find((u) => u.id === id);
         const riderProfile = riderProfiles.find((r) => r.id === id);
         const source = staticUser || riderProfile;
@@ -718,6 +743,21 @@ export const api = {
         }
       }
       return { success: true, id, role: newRole };
+    },
+    // Get crew members (superadmin + core_member roles) for "The Crew" section
+    getCrew: async () => {
+      await delay(100);
+      const users = getRegisteredUsers();
+      const crewRoles = new Set(["superadmin", "core_member"]);
+      const crew = users
+        .filter((u) => crewRoles.has(u.role))
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          linkedRiderId: u.linkedRiderId,
+        }));
+      return { crew };
     },
   },
 
@@ -1217,6 +1257,31 @@ export const api = {
       }
 
       return { success: true };
+    },
+  },
+
+  // About T2W content (editable by Super Admin)
+  aboutContent: {
+    get: async () => {
+      const saved = getStorage<Record<string, string> | null>(ABOUT_CONTENT_KEY, null);
+      return { content: saved };
+    },
+    save: async (content: Record<string, string>) => {
+      setStorage(ABOUT_CONTENT_KEY, content);
+      return { success: true };
+    },
+  },
+
+  // Shared avatar storage
+  avatars: {
+    get: (riderId: string): string | null => {
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      return avatars[riderId] || null;
+    },
+    save: (riderId: string, dataUrl: string) => {
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = dataUrl;
+      setStorage(AVATARS_KEY, avatars);
     },
   },
 

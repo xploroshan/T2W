@@ -83,8 +83,11 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
             })
             .catch(() => {});
         }
-        const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
-        if (saved) setAvatarUrl(saved);
+        // Load avatar from shared store first, then per-key fallback
+        const sharedAvatar = api.avatars.get(riderId);
+        const legacyAvatar = localStorage.getItem(`t2w_avatar_${riderId}`);
+        const avatar = sharedAvatar || legacyAvatar;
+        if (avatar) setAvatarUrl(avatar);
         // Load saved edits
         const savedEdits = localStorage.getItem(`t2w_profile_${riderId}`);
         if (savedEdits) {
@@ -117,7 +120,9 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setAvatarUrl(dataUrl);
+      // Save to both legacy per-key and shared store for visibility
       localStorage.setItem(`t2w_avatar_${riderId}`, dataUrl);
+      api.avatars.save(riderId, dataUrl);
     };
     reader.readAsDataURL(file);
   };
