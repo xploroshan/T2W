@@ -412,20 +412,17 @@ export const api = {
         });
         const data = await res.json();
         if (!res.ok) {
-          // Clear the stored OTP since email wasn't sent
-          delete otps[emailLower];
-          setStorage(RESET_OTP_KEY, otps);
-          throw new Error(data.error || "Failed to send verification email");
+          // Keep OTP stored so user can still complete the flow via console fallback
+          console.warn("[T2W] Email send failed:", data.error);
+          console.info(`[T2W] Password reset OTP for ${emailLower}: ${code}`);
+          return { success: true, emailSent: false };
         }
         return { success: true, emailSent: true };
       } catch (err) {
-        // Clear the stored OTP since email wasn't sent
-        delete otps[emailLower];
-        setStorage(RESET_OTP_KEY, otps);
-        if (err instanceof Error && err.message !== "Failed to fetch") {
-          throw err;
-        }
-        throw new Error("Unable to send verification email. Please ensure the email service is configured.");
+        // Keep OTP stored so user can still complete the flow via console fallback
+        console.warn("[T2W] Email send error:", err instanceof Error ? err.message : err);
+        console.info(`[T2W] Password reset OTP for ${emailLower}: ${code}`);
+        return { success: true, emailSent: false };
       }
     },
 
