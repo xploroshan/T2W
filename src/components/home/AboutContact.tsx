@@ -27,11 +27,11 @@ interface CrewMember {
 
 const DEFAULT_ABOUT = {
   story:
-    "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 140+ member community that has completed 27 rides across India, Nepal, and Thailand.",
+    "Tales on 2 Wheels is a premium motorcycle riding community built for those who believe the road is more than just a path between two places—it is where stories are born. Bringing together passionate riders from all walks of life, we curate thoughtfully designed motorcycle journeys that blend adventure, exploration, and camaraderie. From the lush rainforests of the Western Ghats and pristine coastal highways to the towering landscapes of the Himalayas and beyond, every Tales on 2 Wheels ride is crafted to deliver an experience that is as enriching as it is exhilarating.",
   mission:
     "To create a safe, inclusive, and thrilling motorcycle riding community. We believe every ride is a story waiting to be told, every road a chapter waiting to be written. We promote responsible riding, camaraderie, and the pure joy of two wheels.",
   community:
-    "From weekend warriors to seasoned tourers, T2W welcomes riders of all experience levels. Our rides range from easy day trips to challenging multi-day expeditions. Our veteran riders mentor newcomers, ensuring everyone rides safe and has fun.",
+    "From weekend warriors to seasoned tourers, T2W welcomes riders of all experience levels. For many riders, the dream of exploring new destinations on a motorcycle is often held back by the uncertainty of riding alone or venturing into unfamiliar territories. Tales on 2 Wheels exists to change that. With experienced ride leaders, carefully planned routes, and a strong community spirit, we create a safe and welcoming environment where riders can step beyond their comfort zones and discover the true freedom of motorcycling. Whether it’s a first long-distance ride or an epic expedition across borders, we ensure that every rider rides with confidence—turning every journey into a story worth telling.",
 };
 
 // Role labels for display in The Crew section
