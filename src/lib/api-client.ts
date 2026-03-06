@@ -15,6 +15,7 @@ import {
   type RiderProfile,
 } from "@/data/rider-profiles";
 import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -51,6 +52,8 @@ const DELETED_USERS_KEY = "t2w_deleted_users";
 const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
 const ACTIVITY_LOG_KEY = "t2w_activity_log";
 const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
+const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
+const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -377,23 +380,76 @@ export const api = {
       return buildUserData(found);
     },
 
-    // Forgot password - generates a temp password and "emails" it (simulated)
-    resetPassword: async (email: string) => {
+    // Step 1: Send a 6-digit OTP to the user's registered email
+    sendResetOtp: async (email: string) => {
       await delay(400);
       const users = getRegisteredUsers();
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => u.email.toLowerCase() === emailLower);
       if (!found) throw new Error("No account found with this email");
-      // Generate a random temporary password
-      const tempPassword = "T2W" + Math.random().toString(36).substring(2, 8);
-      // Store as override
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = tempPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      return { success: true, email: emailLower, tempPassword };
+      // Generate 6-digit OTP with 10-minute expiry
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(RESET_OTP_KEY, otps);
+      // Send OTP via email (EmailJS)
+      const emailSent = await sendPasswordResetEmail(emailLower, found.name, code);
+      if (!emailSent) {
+        // EmailJS not configured – for dev/demo, log code to console
+        console.info(`[T2W-DEV] Password reset OTP for ${emailLower}: ${code}`);
+      }
+      return { success: true, emailSent };
     },
 
-    // Change password (after reset or voluntarily)
+    // Step 2: Verify the OTP code the user received via email
+    verifyResetOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No reset code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(RESET_OTP_KEY, otps);
+        throw new Error("Reset code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid code. Please try again.");
+      // OTP verified – remove it and create a short-lived verified session (5 min)
+      delete otps[emailLower];
+      setStorage(RESET_OTP_KEY, otps);
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      verified[emailLower] = Date.now() + 5 * 60 * 1000;
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Step 3: Set new password (only after OTP verified)
+    resetPassword: async (email: string, newPassword: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      // Check verified session
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      const expiresAt = verified[emailLower];
+      if (!expiresAt || Date.now() > expiresAt) {
+        delete verified[emailLower];
+        setStorage(RESET_VERIFIED_KEY, verified);
+        throw new Error("Reset session expired. Please start over.");
+      }
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
+      // Set the new password as override
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = newPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      // Clear verified session
+      delete verified[emailLower];
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Change password (after login, voluntarily)
     changePassword: async (email: string, newPassword: string) => {
       await delay(200);
       const emailLower = email.toLowerCase().trim();
