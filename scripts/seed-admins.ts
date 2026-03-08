@@ -4,7 +4,10 @@
  * Usage:
  *   npx tsx scripts/seed-admins.ts
  *
- * Requires DATABASE_URL and DATABASE_URL_UNPOOLED in .env
+ * Requires DATABASE_URL in environment (or .env file).
+ *
+ * This script is safe to run during builds — it skips existing users and
+ * exits gracefully (exit 0) on errors so it never breaks a deploy.
  */
 
 import "dotenv/config";
@@ -15,12 +18,11 @@ import bcrypt from "bcryptjs";
 import ws from "ws";
 
 if (!process.env.DATABASE_URL) {
-  console.error(
-    "ERROR: DATABASE_URL is not set.\n" +
-    "Make sure you have a .env file in the project root with your Neon database URL.\n" +
-    "See .env.example for the required format."
+  console.warn(
+    "[seed] WARNING: DATABASE_URL is not set — skipping admin seed.\n" +
+    "Set DATABASE_URL in your environment or .env file."
   );
-  process.exit(1);
+  process.exit(0); // Don't fail the build
 }
 
 neonConfig.webSocketConstructor = ws;
@@ -54,7 +56,7 @@ const ADMIN_USERS = [
 ];
 
 async function main() {
-  console.log("Seeding admin users...\n");
+  console.log("[seed] Seeding admin users...\n");
 
   for (const admin of ADMIN_USERS) {
     const existing = await prisma.user.findUnique({
@@ -83,12 +85,13 @@ async function main() {
     console.log(`  [created] ${admin.email} (id: ${user.id})`);
   }
 
-  console.log("\nDone!");
+  console.log("\n[seed] Done!");
 }
 
 main()
   .catch((e) => {
-    console.error("Seed failed:", e);
-    process.exit(1);
+    // Log the error but exit cleanly so the build continues
+    console.error("[seed] Admin seed failed (non-fatal):", e.message || e);
+    process.exit(0);
   })
   .finally(() => prisma.$disconnect());
