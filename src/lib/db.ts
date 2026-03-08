@@ -54,7 +54,7 @@ function createPrismaClient() {
   // Do NOT pass a pre-built Pool instance (the previous code cast with `as any`
   // to hide this type mismatch, which caused silent connection failures).
   const adapter = new PrismaNeon({ connectionString });
-  return new PrismaClient({ adapter, datasourceUrl: connectionString });
+  return new PrismaClient({ adapter });
 }
 
 // Lazy getter — defers initialization until first use so that missing env vars
