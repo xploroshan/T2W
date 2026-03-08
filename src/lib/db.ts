@@ -1,10 +1,17 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../../generated/prisma";
-import ws from "ws";
 
-// Required for Node.js environments (local dev, non-edge runtimes)
-neonConfig.webSocketConstructor = ws;
+// In Node.js environments (local dev), use the ws package for WebSocket.
+// On Vercel/Edge runtimes, the global WebSocket is available natively.
+if (typeof globalThis.WebSocket === "undefined") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    neonConfig.webSocketConstructor = require("ws");
+  } catch {
+    // ws not available — assume native WebSocket exists at runtime
+  }
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -25,10 +32,8 @@ function getDatabaseUrl(): string {
 }
 
 function createPrismaClient() {
-  const pool = new Pool({
-    connectionString: getDatabaseUrl(),
-    ssl: { rejectUnauthorized: false },
-  });
+  const connectionString = getDatabaseUrl();
+  const pool = new Pool({ connectionString });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adapter = new PrismaNeon(pool as any);
   return new PrismaClient({ adapter });
