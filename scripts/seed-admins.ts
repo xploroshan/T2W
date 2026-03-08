@@ -11,7 +11,7 @@
  */
 
 import "dotenv/config";
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../generated/prisma";
 import bcrypt from "bcryptjs";
@@ -27,11 +27,26 @@ if (!process.env.DATABASE_URL) {
 
 neonConfig.webSocketConstructor = ws;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-const adapter = new PrismaNeon(pool);
+// Strip parameters unsupported by the Neon serverless driver (which uses
+// HTTP/WebSocket, not the PostgreSQL wire protocol).
+function cleanConnectionString(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("channel_binding");
+    u.searchParams.delete("sslmode");
+    return u.toString();
+  } catch {
+    return url
+      .replace(/[?&]channel_binding=[^&]*/g, "")
+      .replace(/[?&]sslmode=[^&]*/g, "")
+      .replace(/\?&/, "?")
+      .replace(/\?$/, "");
+  }
+}
+
+const connectionString = cleanConnectionString(process.env.DATABASE_URL);
+// PrismaNeon expects a PoolConfig object — pass connectionString, not a Pool instance.
+const adapter = new PrismaNeon({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 const ADMIN_USERS = [
