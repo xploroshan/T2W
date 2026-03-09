@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title:
     "Motorcycle Rides & Tours in India | Upcoming Group Rides from Bangalore",
   description:
-    "Browse all T2W motorcycle rides - day trips from Bangalore to Nandi Hills & Mysore, weekend getaways to Coorg & Chikmagalur, multi-day tours to Hampi, Goa, Rajasthan & Spiti Valley. Register for upcoming rides now!",
+    "Browse all T2W motorcycle rides - day trips from Bangalore, weekend getaways to Coorg & Chikmagalur, multi-day tours to Hampi, Goa, Rajasthan & Spiti Valley. Register for upcoming rides now!",
   keywords: [
     "motorcycle rides Bangalore",
     "bike tours India",
