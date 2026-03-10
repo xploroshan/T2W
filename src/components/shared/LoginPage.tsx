@@ -52,8 +52,8 @@ export function LoginPage() {
     setError(null);
 
     try {
-      await login(email, password);
-      router.push("/dashboard");
+      const { user: loggedInUser } = await login(email, password);
+      router.push(loggedInUser.linkedRiderId ? `/rider/${loggedInUser.linkedRiderId}` : "/rides");
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);

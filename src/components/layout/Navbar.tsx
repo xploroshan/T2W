@@ -80,7 +80,7 @@ export function Navbar() {
             ))}
             {user && (
               <Link
-                href="/dashboard"
+                href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                 className="relative rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
                 onMouseEnter={() => setActiveDropdown("My Space")}
                 onMouseLeave={() => setActiveDropdown(null)}
@@ -114,7 +114,7 @@ export function Navbar() {
             ) : user ? (
               <>
                 <Link
-                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/dashboard"}
+                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                   className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
                 >
                   <User className="h-4 w-4" />
@@ -174,7 +174,7 @@ export function Navbar() {
               ))}
               {user && (
                 <Link
-                  href="/dashboard"
+                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                   onClick={() => setIsOpen(false)}
                   className="rounded-xl px-4 py-3 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                 >
@@ -194,7 +194,7 @@ export function Navbar() {
               {user ? (
                 <>
                   <Link
-                    href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/dashboard"}
+                    href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                     onClick={() => setIsOpen(false)}
                     className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                   >
