@@ -44,13 +44,13 @@ interface UserData {
 interface AuthContextType {
   user: UserData | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ user: UserData }>;
   sendResetOtp: (email: string) => Promise<{ emailSent: boolean }>;
   verifyResetOtp: (email: string, code: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
   sendOtp: (email: string) => Promise<string>;
   verifyOtp: (email: string, code: string) => Promise<void>;
-  register: (data: Record<string, unknown>) => Promise<void>;
+  register: (data: Record<string, unknown>) => Promise<{ user: UserData }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   // Role helpers
@@ -98,12 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser().finally(() => setLoading(false));
   }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<{ user: UserData }> => {
     const data = await apiFetch<{ user: UserData }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
     setUser(data.user);
+    return data;
   };
 
   const sendResetOtp = async (email: string): Promise<{ emailSent: boolean }> => {
@@ -143,12 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const register = async (formData: Record<string, unknown>) => {
+  const register = async (formData: Record<string, unknown>): Promise<{ user: UserData }> => {
     const data = await apiFetch<{ user: UserData }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(formData),
     });
     setUser(data.user);
+    return data;
   };
 
   const logout = async () => {

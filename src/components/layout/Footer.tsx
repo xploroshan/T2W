@@ -20,8 +20,7 @@ const footerLinks = {
   ],
   community: [
     { label: "Blog", href: "/blogs" },
-    { label: "Rider Dashboard", href: "/dashboard" },
-    { label: "Achievements", href: "/dashboard" },
+    { label: "Rider Profiles", href: "/rides" },
     { label: "Guidelines", href: "/guidelines" },
   ],
   company: [

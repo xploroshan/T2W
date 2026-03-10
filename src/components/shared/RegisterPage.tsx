@@ -160,8 +160,8 @@ export function RegisterPage() {
       setLoading(true);
       try {
         const { name, email, phone, password, city, ridingExperience, motorcycle } = formData;
-        await register({ name, email, phone, password, city, ridingExperience, motorcycle });
-        router.push("/dashboard");
+        const { user: newUser } = await register({ name, email, phone, password, city, ridingExperience, motorcycle });
+        router.push(newUser.linkedRiderId ? `/rider/${newUser.linkedRiderId}` : "/rides");
       } catch (err: unknown) {
         if (err instanceof Error) {
           setError(err.message);
