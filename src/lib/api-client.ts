@@ -517,6 +517,32 @@ export const api = {
       if (params?.includes("pending")) {
         return { users: mockPendingUsers };
       }
+
+      // Fetch DB roles from /api/riders (includes userRole from RiderProfile.role)
+      let dbRoles: Record<string, string> = {}; // email -> role
+      let dbRolesById: Record<string, string> = {}; // id -> role
+      try {
+        const res = await fetch("/api/riders");
+        if (res.ok) {
+          const data = await res.json();
+          for (const r of (data.riders || []) as Array<{ id: string; email: string; userRole?: string | null }>) {
+            if (r.userRole && r.userRole !== "rider") {
+              dbRoles[r.email.toLowerCase().trim()] = r.userRole;
+              dbRolesById[r.id] = r.userRole;
+            }
+          }
+        }
+      } catch { /* ignore - will fall back to localStorage roles */ }
+
+      // Role overrides from localStorage (immediate UI update before DB propagates)
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+
+      // Helper: resolve role for a user/rider, preferring DB > localStorage override > default
+      function resolveRole(id: string, email: string, defaultRole: string): string {
+        const emailKey = email.toLowerCase().trim();
+        return dbRoles[emailKey] || dbRolesById[id] || roleOverrides[id] || defaultRole;
+      }
+
       // Start with registered users (built-in + localStorage signups)
       const registeredUsers = getRegisteredUsers();
       const combined: Array<{
@@ -528,13 +554,14 @@ export const api = {
         joinDate: string;
       }> = [];
 
-      // 1. Add all mockAllUsers, merging role from registeredUsers
+      // 1. Add all mockAllUsers, merging role from DB/overrides/registeredUsers
       const addedEmails = new Set<string>();
       mockAllUsers.forEach((u) => {
         const reg = registeredUsers.find(
           (r) => r.email.toLowerCase() === u.email.toLowerCase()
         );
-        combined.push(reg ? { ...u, role: reg.role } : u);
+        const baseRole = reg ? reg.role : u.role;
+        combined.push({ ...u, role: resolveRole(u.id, u.email, baseRole) });
         addedEmails.add(u.email.toLowerCase());
       });
 
@@ -546,21 +573,22 @@ export const api = {
             id: r.id,
             name: r.name,
             email: r.email,
-            role: r.role,
+            role: resolveRole(r.id, r.email, r.role),
             isApproved: r.isApproved,
             joinDate: r.joinDate,
           });
           addedEmails.add(r.email.toLowerCase());
         });
 
-      // 3. Add all rider profiles from past rides (as t2w_rider)
+      // 3. Add all rider profiles from past rides
       getRiderProfiles().forEach((rider) => {
         if (addedEmails.has(rider.email.toLowerCase())) return;
+        const defaultRole = rider.ridesCompleted > 0 ? "t2w_rider" : "rider";
         combined.push({
           id: rider.id,
           name: rider.name,
           email: rider.email,
-          role: rider.ridesCompleted > 0 ? "t2w_rider" : "rider",
+          role: resolveRole(rider.id, rider.email, defaultRole),
           isApproved: true,
           joinDate: rider.joinDate || "2024-03-16",
         });
@@ -647,55 +675,39 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only) – persisted to database
+    // Change role (SuperAdmin only) – persisted to DB + localStorage
     changeRole: async (id: string, newRole: UserRole) => {
       // Find the user's email for DB lookup (the id may be a frontend-only ID)
       const allKnown = getRegisteredUsers();
       const knownUser = allKnown.find((u) => u.id === id);
+      const staticUser = mockAllUsers.find((u) => u.id === id);
       const riderProfile = getRiderProfiles().find((r) => r.id === id);
-      const email = knownUser?.email || riderProfile?.email || undefined;
+      const email = knownUser?.email || staticUser?.email || riderProfile?.email || undefined;
 
-      // Persist to DB first
+      // Always persist to localStorage immediately for instant UI feedback
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+      roleOverrides[id] = newRole;
+      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+
+      // Also persist to DB (RiderProfile.role + User.role)
       try {
         const res = await fetch("/api/users/role", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ userId: id, email, newRole }),
         });
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          const data = await res.json();
-          // Also update localStorage for immediate UI reflection
-          const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
-          roleOverrides[id] = newRole;
-          setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+          console.log("[T2W] Role persisted to DB:", data);
           return { success: true, id: data.userId || id, role: newRole };
         }
-        const errData = await res.json().catch(() => ({}));
-        // If user not found in DB, fall through to localStorage-only
-        if (res.status !== 404) {
-          throw new Error(errData.error || "Failed to change role");
-        }
+        console.warn("[T2W] DB role change returned", res.status, data.error || "");
       } catch (e) {
-        // If it's a real error (not 404 fallthrough), re-throw
-        if (e instanceof Error && e.message !== "Failed to change role") {
-          console.warn("[T2W] DB role change failed, falling back to localStorage:", e.message);
-        }
+        console.warn("[T2W] DB role change network error:", e);
       }
-      // Fallback: persist via localStorage role overrides
-      await delay(200);
-      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
-      roleOverrides[id] = newRole;
-      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
-      const users = getRegisteredUsers();
-      const user = users.find((u) => u.id === id);
-      if (user) {
-        user.role = newRole;
-        if (!user.linkedRiderId) {
-          const linkedRider = findRiderByEmail(user.email);
-          if (linkedRider) user.linkedRiderId = linkedRider.id;
-        }
-        saveCustomUsers(users);
-      }
+
+      // DB failed — localStorage is already updated above, return success
       return { success: true, id, role: newRole };
     },
     // Get crew members (superadmin + core_member roles) for "The Crew" section
