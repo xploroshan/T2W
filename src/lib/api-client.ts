@@ -717,21 +717,47 @@ export const api = {
   rides: {
     list: async () => {
       await delay(200);
-      return { rides: getAllRides() };
+      const rides = getAllRides();
+      // Fetch participation counts from DB to correct registeredRiders for completed rides
+      try {
+        const ridersRes = await fetch("/api/riders");
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          const allRiders = (data.riders || []) as Array<{ participationMap: Record<string, number> }>;
+          // Count riders per ride from the participation matrix
+          const rideParticipantCount: Record<string, number> = {};
+          for (const r of allRiders) {
+            for (const [rideId, pts] of Object.entries(r.participationMap || {})) {
+              if (pts > 0) {
+                rideParticipantCount[rideId] = (rideParticipantCount[rideId] || 0) + 1;
+              }
+            }
+          }
+          // Override registeredRiders for completed rides with matrix data
+          for (const ride of rides) {
+            if (ride.status === "completed" && rideParticipantCount[ride.id] !== undefined) {
+              ride.registeredRiders = rideParticipantCount[ride.id];
+            }
+          }
+        }
+      } catch {
+        // Fallback: use static registeredRiders
+      }
+      return { rides };
     },
     get: async (id: string) => {
       await delay(150);
       const ride = getAllRides().find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
       const regs = getRideRegistrations();
-      // Get rider names from API (database-backed)
+      // Get rider names from API (database-backed matrix = primary source of truth)
       let dbRiderNames: string[] = [];
       try {
         const ridersRes = await fetch(`/api/riders?rideId=${id}`);
         if (ridersRes.ok) {
           const data = await ridersRes.json();
           const riders = data.riders || [];
-          // Filter riders who participated in this ride
+          // Filter riders who participated in this ride (from participation matrix)
           dbRiderNames = riders
             .filter((r: Record<string, unknown>) => {
               const pMap = r.participationMap as Record<string, number> | undefined;
@@ -742,14 +768,14 @@ export const api = {
       } catch {
         // Fallback: use static ride.riders if API fails
       }
-      const customRiders = ride.riders || [];
-      const allRiderNames = [...new Set([...dbRiderNames, ...customRiders])];
+      // Use DB participation as primary source; only fall back to static data if DB returned nothing
+      const riderNames = dbRiderNames.length > 0 ? dbRiderNames : (ride.riders || []);
       return {
         ride: {
           ...ride,
           registrations: regs[id] || [],
-          riders: allRiderNames,
-          registeredRiders: allRiderNames.length,
+          riders: riderNames,
+          registeredRiders: riderNames.length,
         },
       };
     },
