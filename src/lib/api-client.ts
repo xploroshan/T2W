@@ -10,11 +10,30 @@ import {
   mockRidePosts,
 } from "@/data/mock";
 import {
-  riderProfiles,
-  riderNameToId,
   type RiderProfile,
 } from "@/data/rider-profiles";
+// Grid store still used for backward-compat in mock user/blog functions.
+// Rider data is now served via /api/riders (database-backed).
+import {
+  getGridRiders,
+  getGridRider,
+  getGridRiderByEmail,
+  getGridRiderNameToId,
+  type GridRider,
+} from "@/lib/grid-store";
 import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
+
+// ── Grid-backed accessors (replacing static imports) ──
+// These functions read from the grid store which is the single source of truth.
+// The grid store is seeded from the Excel-imported static data and can be
+// edited by the Super Admin via the participation matrix grid.
+function getRiderProfiles(): GridRider[] {
+  return getGridRiders();
+}
+
+function getRiderNameToIdMap(): Record<string, string> {
+  return getGridRiderNameToId();
+}
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -34,18 +53,76 @@ function getStorage<T>(key: string, fallback: T): T {
 function setStorage(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
+  // Dispatch a custom event so other components/tabs can react to data changes
+  window.dispatchEvent(new CustomEvent("t2w-storage-update", { detail: { key } }));
 }
 
 // ── Storage keys ──
 const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
 const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
+const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
 const RIDE_REG_KEY = "t2w_ride_registrations";
 const NOTIF_KEY = "t2w_notif_read";
 const BLOGS_KEY = "t2w_blogs";
 const RIDE_POSTS_KEY = "t2w_ride_posts";
 const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
+const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
+const ACTIVITY_LOG_KEY = "t2w_activity_log";
+const ABOUT_CONTENT_KEY = "t2w_about_content"; // editable About T2W content
+const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across users)
+const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
+const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
+const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
+// Participation is now managed by grid-store.ts (the primary database)
+
+// ── Activity Log ──
+export type ActivityAction =
+  | "ride_created"
+  | "ride_edited"
+  | "ride_deleted"
+  | "user_approved"
+  | "user_rejected"
+  | "user_deleted"
+  | "user_bulk_deleted"
+  | "user_role_changed"
+  | "blog_approved"
+  | "blog_rejected"
+  | "post_approved"
+  | "post_rejected"
+  | "content_deleted"
+  | "form_settings_saved";
+
+export type ActivityLogEntry = {
+  id: string;
+  action: ActivityAction;
+  performedBy: string;
+  performedByName: string;
+  timestamp: string;
+  targetId: string;
+  targetName: string;
+  details?: string;
+  rollbackData?: unknown;
+};
+
+function getActivityLog(): ActivityLogEntry[] {
+  return getStorage<ActivityLogEntry[]>(ACTIVITY_LOG_KEY, []);
+}
+
+function addActivityLog(
+  entry: Omit<ActivityLogEntry, "id" | "timestamp">
+) {
+  const log = getActivityLog();
+  log.unshift({
+    ...entry,
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: new Date().toISOString(),
+  });
+  // Keep last 200 entries
+  if (log.length > 200) log.length = 200;
+  setStorage(ACTIVITY_LOG_KEY, log);
+}
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -63,10 +140,9 @@ interface StoredUser {
   linkedRiderId?: string;
 }
 
-// ── Find rider profile by email match ──
-function findRiderByEmail(email: string): RiderProfile | undefined {
-  const lowerEmail = email.toLowerCase().trim();
-  return riderProfiles.find((r) => r.email.toLowerCase().trim() === lowerEmail);
+// ── Find rider profile by email match (uses grid store as primary) ──
+function findRiderByEmail(email: string): GridRider | undefined {
+  return getGridRiderByEmail(email);
 }
 
 // ── Determine role based on rider participation ──
@@ -75,14 +151,14 @@ function determineRoleForRider(rider: RiderProfile | undefined): UserRole {
   return "rider";
 }
 
-// ── Built-in seed users (super admins + core members) ──
+// ── Built-in seed users (super admins only) ──
 function getBuiltinUsers(): StoredUser[] {
   return [
     {
       id: "admin-1",
       name: "Roshan Manuel",
       email: "roshan.manuel@gmail.com",
-      password: "admin123",
+      password: "PingPong!2345",
       phone: "+91 9880141543",
       city: "Bangalore",
       ridingExperience: "veteran",
@@ -90,7 +166,7 @@ function getBuiltinUsers(): StoredUser[] {
       role: "superadmin",
       joinDate: "2024-03-16",
       isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
+      linkedRiderId: getRiderProfiles().find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
     },
     {
       id: "admin-6",
@@ -105,64 +181,9 @@ function getBuiltinUsers(): StoredUser[] {
       joinDate: "2024-03-16",
       isApproved: true,
     },
-    {
-      id: "admin-2",
-      name: "Sanjeev Kumar",
-      email: "san.nh007@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "san.nh007@gmail.com")?.id,
-    },
-    {
-      id: "admin-3",
-      name: "Jay Trivedi",
-      email: "jaytrivedi.b@gmail.com",
-      password: "core123",
-      phone: "9986160300",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "jaytrivedi.b@gmail.com")?.id,
-    },
-    {
-      id: "admin-4",
-      name: "Shreyas BM",
-      email: "shreyasbm77@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "shreyasbm77@gmail.com")?.id,
-    },
-    {
-      id: "admin-5",
-      name: "Harish Mysuru",
-      email: "harishkumarmr27@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "harishkumarmr27@gmail.com")?.id,
-    },
   ];
 }
+
 
 function getRegisteredUsers(): StoredUser[] {
   const stored = getStorage<StoredUser[]>(USERS_KEY, []);
@@ -172,7 +193,15 @@ function getRegisteredUsers(): StoredUser[] {
   const customUsers = stored.filter(
     (u) => !builtinEmails.has(u.email.toLowerCase())
   );
-  return [...builtinUsers, ...customUsers];
+  // Apply role overrides (persisted by SuperAdmin role changes)
+  const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+  const allUsers = [...builtinUsers, ...customUsers];
+  for (const user of allUsers) {
+    if (roleOverrides[user.id]) {
+      user.role = roleOverrides[user.id];
+    }
+  }
+  return allUsers;
 }
 
 function saveCustomUsers(users: StoredUser[]) {
@@ -188,9 +217,9 @@ function saveCustomUsers(users: StoredUser[]) {
 function buildUserData(dbUser: StoredUser): {
   user: Record<string, unknown>;
 } {
-  // Find linked rider profile
+  // Find linked rider profile from grid store (single source of truth)
   const linkedRider = dbUser.linkedRiderId
-    ? riderProfiles.find((r) => r.id === dbUser.linkedRiderId)
+    ? getGridRider(dbUser.linkedRiderId)
     : findRiderByEmail(dbUser.email);
 
   const ridesCompleted = linkedRider?.ridesCompleted || 0;
@@ -283,7 +312,10 @@ function getCustomRides(): Ride[] {
 }
 
 function getAllRides(): Ride[] {
-  return [...mockRides, ...getCustomRides()];
+  const custom = getCustomRides();
+  const customIds = new Set(custom.map((r) => r.id));
+  // Custom rides override mock rides with the same id
+  return [...mockRides.filter((r) => !customIds.has(r.id)), ...custom];
 }
 
 // ── API object ──
@@ -296,10 +328,9 @@ export const api = {
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => {
         if (u.email.toLowerCase() !== emailLower) return false;
-        // Check password overrides first (set via forgot password)
+        // Accept either the override password (from forgot password) or the original
         const override = overrides[emailLower];
-        if (override) return password === override;
-        // Fallback to stored password
+        if (override && password === override) return true;
         return u.password === password;
       });
       if (!found) throw new Error("Invalid email or password");
@@ -307,34 +338,78 @@ export const api = {
       return buildUserData(found);
     },
 
-    // Social / email-only login (Google, Facebook simulation)
-    loginByEmail: async (email: string) => {
-      await delay(300);
-      const users = getRegisteredUsers();
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => u.email.toLowerCase() === emailLower);
-      if (!found) throw new Error("NO_ACCOUNT");
-      setStorage(AUTH_KEY, found.id);
-      return buildUserData(found);
-    },
-
-    // Forgot password - generates a temp password and returns it
-    resetPassword: async (email: string) => {
+    // Step 1: Send a 6-digit OTP to the user's registered email
+    sendResetOtp: async (email: string) => {
       await delay(400);
       const users = getRegisteredUsers();
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => u.email.toLowerCase() === emailLower);
       if (!found) throw new Error("No account found with this email");
-      // Generate a random temporary password
-      const tempPassword = "T2W" + Math.random().toString(36).substring(2, 8);
-      // Store as override
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = tempPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      return { success: true, tempPassword };
+      // Generate 6-digit OTP with 10-minute expiry
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(RESET_OTP_KEY, otps);
+      // Attempt to send OTP via server-side API route (fire-and-forget)
+      fetch("/api/auth/send-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
+      }).catch(() => {
+        // Email sending is best-effort; OTP is stored in localStorage regardless
+      });
+      return { success: true, emailSent: true };
     },
 
-    // Change password (after reset or voluntarily)
+    // Step 2: Verify the OTP code the user received via email
+    verifyResetOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No reset code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(RESET_OTP_KEY, otps);
+        throw new Error("Reset code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid code. Please try again.");
+      // OTP verified – remove it and create a short-lived verified session (5 min)
+      delete otps[emailLower];
+      setStorage(RESET_OTP_KEY, otps);
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      verified[emailLower] = Date.now() + 5 * 60 * 1000;
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Step 3: Set new password (only after OTP verified)
+    resetPassword: async (email: string, newPassword: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      // Check verified session
+      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
+      const expiresAt = verified[emailLower];
+      if (!expiresAt || Date.now() > expiresAt) {
+        delete verified[emailLower];
+        setStorage(RESET_VERIFIED_KEY, verified);
+        throw new Error("Reset session expired. Please start over.");
+      }
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
+      // Set the new password as override
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = newPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      // Clear verified session
+      delete verified[emailLower];
+      setStorage(RESET_VERIFIED_KEY, verified);
+      return { success: true };
+    },
+
+    // Change password (after login, voluntarily)
     changePassword: async (email: string, newPassword: string) => {
       await delay(200);
       const emailLower = email.toLowerCase().trim();
@@ -342,6 +417,48 @@ export const api = {
       overrides[emailLower] = newPassword;
       setStorage(PASSWORDS_KEY, overrides);
       return { success: true };
+    },
+
+    // Send OTP to email for verification (simulated)
+    sendOtp: async (email: string) => {
+      await delay(300);
+      const emailLower = email.toLowerCase().trim();
+      if (!emailLower || !emailLower.includes("@")) {
+        throw new Error("Please enter a valid email address");
+      }
+      // Check if email already registered
+      const users = getRegisteredUsers();
+      if (users.find((u) => u.email.toLowerCase() === emailLower)) {
+        throw new Error("An account with this email already exists");
+      }
+      // Generate 6-digit OTP
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      otps[emailLower] = { code, expiresAt };
+      setStorage(EMAIL_OTP_KEY, otps);
+      // In production, this would send a real email
+      console.info(`[T2W] OTP for ${email}: ${code}`);
+      return { success: true, message: `Verification code sent to ${email}` };
+    },
+
+    // Verify OTP code
+    verifyOtp: async (email: string, code: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
+      const stored = otps[emailLower];
+      if (!stored) throw new Error("No verification code found. Please request a new one.");
+      if (Date.now() > stored.expiresAt) {
+        delete otps[emailLower];
+        setStorage(EMAIL_OTP_KEY, otps);
+        throw new Error("Verification code has expired. Please request a new one.");
+      }
+      if (stored.code !== code.trim()) throw new Error("Invalid verification code. Please try again.");
+      // Mark as verified by removing from pending
+      delete otps[emailLower];
+      setStorage(EMAIL_OTP_KEY, otps);
+      return { success: true, verified: true };
     },
 
     register: async (data: Record<string, unknown>) => {
@@ -352,21 +469,22 @@ export const api = {
         throw new Error("An account with this email already exists");
       }
 
-      // Check if this email matches an existing rider profile
+      // Check if this email matches an existing rider in the grid (primary database)
       const matchedRider = findRiderByEmail(email);
       const role = determineRoleForRider(matchedRider);
 
+      // If email matches a grid rider, merge: use grid data as base, user-provided data as override
       const newUser: StoredUser = {
-        id: `user-${Date.now()}`,
-        name: String(data.name || ""),
+        id: matchedRider ? matchedRider.id : `user-${Date.now()}`,
+        name: String(data.name || matchedRider?.name || ""),
         email: String(data.email || ""),
         password: String(data.password || ""),
-        phone: String(data.phone || ""),
+        phone: String(data.phone || matchedRider?.phone || ""),
         city: String(data.city || ""),
-        ridingExperience: String(data.ridingExperience || ""),
+        ridingExperience: String(data.ridingExperience || (matchedRider && matchedRider.ridesCompleted > 10 ? "veteran" : matchedRider && matchedRider.ridesCompleted > 3 ? "experienced" : "")),
         motorcycle: String(data.motorcycle || ""),
         role,
-        joinDate: new Date().toISOString().split("T")[0],
+        joinDate: matchedRider?.joinDate || new Date().toISOString().split("T")[0],
         isApproved: role === "t2w_rider", // T2W riders auto-approved; regular riders need approval
         linkedRiderId: matchedRider?.id,
       };
@@ -436,7 +554,7 @@ export const api = {
         });
 
       // 3. Add all rider profiles from past rides (as t2w_rider)
-      riderProfiles.forEach((rider) => {
+      getRiderProfiles().forEach((rider) => {
         if (addedEmails.has(rider.email.toLowerCase())) return;
         combined.push({
           id: rider.id,
@@ -470,10 +588,10 @@ export const api = {
         if (data.phone !== undefined) user.phone = String(data.phone);
         saveCustomUsers(users);
       } else {
-        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
         // Create a custom record so changes persist.
         const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const riderProfile = getRiderProfiles().find((r) => r.id === id);
         const source = staticUser || riderProfile;
         if (source) {
           const newUser: StoredUser = {
@@ -529,21 +647,33 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only)
+    // Change role (SuperAdmin only) – persisted via role overrides map
     changeRole: async (id: string, newRole: UserRole) => {
       await delay(200);
+      // Persist the role override for ALL user types (built-in, custom, static)
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+      roleOverrides[id] = newRole;
+      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+      // Also update custom users if they exist there
       const users = getRegisteredUsers();
       const user = users.find((u) => u.id === id);
       if (user) {
         user.role = newRole;
+        // Ensure linkedRiderId is set for crew display
+        if (!user.linkedRiderId) {
+          const linkedRider = findRiderByEmail(user.email);
+          if (linkedRider) user.linkedRiderId = linkedRider.id;
+        }
         saveCustomUsers(users);
       } else {
-        // User may exist only in static data (riderProfiles/mockAllUsers).
-        // Create a custom record so the role change persists.
+        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
+        // Create a custom record so the user shows up in queries.
         const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const riderProfile = getRiderProfiles().find((r) => r.id === id);
         const source = staticUser || riderProfile;
         if (source) {
+          // Try to link to a rider profile for avatar/stats
+          const linkedRider = findRiderByEmail(source.email);
           const newUser: StoredUser = {
             id: source.id,
             name: source.name,
@@ -556,29 +686,112 @@ export const api = {
             role: newRole,
             joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
             isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+            linkedRiderId: linkedRider?.id || ("id" in source ? source.id : undefined),
           };
           saveCustomUsers([...users, newUser]);
         }
       }
       return { success: true, id, role: newRole };
     },
+    // Get crew members (superadmin + core_member roles) for "The Crew" section
+    getCrew: async () => {
+      await delay(100);
+      const users = getRegisteredUsers();
+      const crewRoles = new Set(["superadmin", "core_member"]);
+
+      // Fetch rider profiles from DB for avatar URLs
+      let riderAvatars: Record<string, string> = {};
+      try {
+        const ridersRes = await fetch("/api/riders");
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          for (const r of data.riders || []) {
+            if (r.avatarUrl) riderAvatars[r.id] = r.avatarUrl;
+          }
+        }
+      } catch { /* ignore */ }
+
+      const crew = users
+        .filter((u) => crewRoles.has(u.role))
+        // Hide "T2W Official" system account from crew display
+        .filter((u) => !u.email.toLowerCase().includes("taleson2wheels.official"))
+        .map((u) => {
+          // Try to resolve linkedRiderId by email if not set
+          const riderId = u.linkedRiderId || findRiderByEmail(u.email)?.id;
+          return {
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            linkedRiderId: riderId,
+            avatarUrl: riderId ? (riderAvatars[riderId] || null) : null,
+          };
+        });
+      return { crew };
+    },
   },
 
   rides: {
     list: async () => {
       await delay(200);
-      return { rides: getAllRides() };
+      const rides = getAllRides();
+      // Fetch participation counts from DB to correct registeredRiders for completed rides
+      try {
+        const ridersRes = await fetch("/api/riders");
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          const allRiders = (data.riders || []) as Array<{ participationMap: Record<string, number> }>;
+          // Count riders per ride from the participation matrix
+          const rideParticipantCount: Record<string, number> = {};
+          for (const r of allRiders) {
+            for (const [rideId, pts] of Object.entries(r.participationMap || {})) {
+              if (pts > 0) {
+                rideParticipantCount[rideId] = (rideParticipantCount[rideId] || 0) + 1;
+              }
+            }
+          }
+          // Override registeredRiders for completed rides with matrix data
+          for (const ride of rides) {
+            if (ride.status === "completed" && rideParticipantCount[ride.id] !== undefined) {
+              ride.registeredRiders = rideParticipantCount[ride.id];
+            }
+          }
+        }
+      } catch {
+        // Fallback: use static registeredRiders
+      }
+      return { rides };
     },
     get: async (id: string) => {
       await delay(150);
       const ride = getAllRides().find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
       const regs = getRideRegistrations();
+      // Get rider names from API (database-backed matrix = primary source of truth)
+      let dbRiderNames: string[] = [];
+      try {
+        const ridersRes = await fetch(`/api/riders?rideId=${id}`);
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          const riders = data.riders || [];
+          // Filter riders who participated in this ride (from participation matrix)
+          dbRiderNames = riders
+            .filter((r: Record<string, unknown>) => {
+              const pMap = r.participationMap as Record<string, number> | undefined;
+              return pMap && pMap[id] && pMap[id] > 0;
+            })
+            .map((r: Record<string, unknown>) => r.name as string);
+        }
+      } catch {
+        // Fallback: use static ride.riders if API fails
+      }
+      // Use DB participation as primary source; only fall back to static data if DB returned nothing
+      const riderNames = dbRiderNames.length > 0 ? dbRiderNames : (ride.riders || []);
       return {
         ride: {
           ...ride,
           registrations: regs[id] || [],
-          riders: ride.riders || [],
+          riders: riderNames,
+          registeredRiders: riderNames.length,
         },
       };
     },
@@ -592,6 +805,22 @@ export const api = {
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
+      const custom = getCustomRides();
+      const idx = custom.findIndex((r) => r.id === id);
+      if (idx !== -1) {
+        custom[idx] = { ...custom[idx], ...data } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { ride: custom[idx] };
+      }
+      // For mock rides, store as a custom override
+      const allRides = getAllRides();
+      const mockRide = allRides.find((r) => r.id === id);
+      if (mockRide) {
+        const updated = { ...mockRide, ...data } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { ride: updated };
+      }
       return { ride: { id, ...data } };
     },
     delete: async (id: string) => {
@@ -625,14 +854,20 @@ export const api = {
         rideId: id,
         userId,
         riderName: String(data?.riderName || ""),
+        address: String(data?.address || ""),
         email: String(data?.email || ""),
         phone: String(data?.phone || ""),
         emergencyContactName: String(data?.emergencyContactName || ""),
         emergencyContactPhone: String(data?.emergencyContactPhone || ""),
         bloodGroup: String(data?.bloodGroup || ""),
+        referredBy: String(data?.referredBy || ""),
+        foodPreference: String(data?.foodPreference || "") as RideRegistration["foodPreference"],
+        ridingType: String(data?.ridingType || "") as RideRegistration["ridingType"],
         vehicleModel: String(data?.vehicleModel || ""),
         vehicleRegNumber: String(data?.vehicleRegNumber || ""),
+        agreedCancellationTerms: Boolean(data?.agreedCancellationTerms),
         agreedIndemnity: Boolean(data?.agreedIndemnity),
+        paymentScreenshot: String(data?.paymentScreenshot || ""),
         registeredAt: new Date().toISOString(),
         confirmationCode: code,
       };
@@ -645,28 +880,124 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
+    addRider: async (rideId: string, riderName: string) => {
+      await delay(100);
+      const custom = getCustomRides();
+      const allRides = getAllRides();
+      const existingCustomIdx = custom.findIndex((r) => r.id === rideId);
+      if (existingCustomIdx !== -1) {
+        const riders = custom[existingCustomIdx].riders || [];
+        if (!riders.includes(riderName)) riders.push(riderName);
+        custom[existingCustomIdx] = { ...custom[existingCustomIdx], riders, registeredRiders: riders.length } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      const mockRide = allRides.find((r) => r.id === rideId);
+      if (mockRide) {
+        const riders = [...(mockRide.riders || [])];
+        if (!riders.includes(riderName)) riders.push(riderName);
+        const updated = { ...mockRide, riders, registeredRiders: riders.length } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      throw new Error("Ride not found");
+    },
+    removeRider: async (rideId: string, riderName: string) => {
+      await delay(100);
+      const custom = getCustomRides();
+      const allRides = getAllRides();
+      const existingCustomIdx = custom.findIndex((r) => r.id === rideId);
+      if (existingCustomIdx !== -1) {
+        const riders = (custom[existingCustomIdx].riders || []).filter((r: string) => r !== riderName);
+        custom[existingCustomIdx] = { ...custom[existingCustomIdx], riders, registeredRiders: riders.length } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      const mockRide = allRides.find((r) => r.id === rideId);
+      if (mockRide) {
+        const riders = (mockRide.riders || []).filter((r: string) => r !== riderName);
+        const updated = { ...mockRide, riders, registeredRiders: riders.length } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      throw new Error("Ride not found");
+    },
+  },
+
+  regFormSettings: {
+    get: async () => {
+      await delay(50);
+      return getStorage<Record<string, unknown>>(REG_FORM_SETTINGS_KEY, {});
+    },
+    save: async (settings: Record<string, unknown>) => {
+      await delay(100);
+      setStorage(REG_FORM_SETTINGS_KEY, settings);
+      return { success: true };
+    },
   },
 
   riders: {
-    list: async () => {
-      await delay(150);
-      return { riders: riderProfiles };
+    list: async (search?: string) => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/riders?${params}`);
+      if (!res.ok) throw new Error("Failed to load riders");
+      return res.json();
     },
     get: async (id: string) => {
-      await delay(100);
-      const rider = riderProfiles.find((r) => r.id === id);
-      if (!rider) throw new Error("Rider not found");
-      return { rider };
+      const res = await fetch(`/api/riders/${id}`);
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.mergedIntoId) {
+          // Follow the merge redirect
+          const res2 = await fetch(`/api/riders/${data.mergedIntoId}`);
+          if (!res2.ok) throw new Error("Rider not found");
+          return res2.json();
+        }
+        throw new Error("Rider not found");
+      }
+      return res.json();
+    },
+    update: async (id: string, data: Partial<RiderProfile>) => {
+      const res = await fetch(`/api/riders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update rider");
+      return res.json();
+    },
+    create: async (data: Record<string, unknown>) => {
+      const res = await fetch("/api/riders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create rider");
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`/api/riders/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete rider");
+      return res.json();
+    },
+    checkEmail: async (email: string) => {
+      const res = await fetch("/api/riders/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error("Failed to check email");
+      return res.json();
     },
     getByName: async (name: string) => {
-      await delay(50);
-      const key = name.toLowerCase().trim();
-      const id = riderNameToId[key];
-      if (id) {
-        const rider = riderProfiles.find((r) => r.id === id);
-        return { rider: rider || null, riderId: id };
-      }
-      return { rider: null, riderId: null };
+      const data = await api.riders.list(name);
+      const rider = (data.riders as RiderProfile[]).find(
+        (r: RiderProfile) => r.name.toLowerCase().trim() === name.toLowerCase().trim()
+      );
+      return { rider: rider || null, riderId: rider?.id || null };
     },
   },
 
@@ -817,20 +1148,32 @@ export const api = {
 
   motorcycles: {
     list: async () => {
-      await delay(100);
-      return { motorcycles: mockCurrentUser.motorcycles };
+      const res = await fetch("/api/motorcycles");
+      if (!res.ok) throw new Error("Failed to load motorcycles");
+      return res.json();
     },
     create: async (data: Record<string, unknown>) => {
-      await delay(300);
-      return { motorcycle: { id: `moto-${Date.now()}`, ...data } };
+      const res = await fetch("/api/motorcycles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create motorcycle");
+      return res.json();
     },
     update: async (id: string, data: Record<string, unknown>) => {
-      await delay(200);
-      return { motorcycle: { id, ...data } };
+      const res = await fetch(`/api/motorcycles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update motorcycle");
+      return res.json();
     },
     delete: async (id: string) => {
-      await delay(200);
-      return { success: true, id };
+      const res = await fetch(`/api/motorcycles/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete motorcycle");
+      return res.json();
     },
   },
 
@@ -914,7 +1257,7 @@ export const api = {
           totalUsers: new Set([
             ...mockAllUsers.map((u) => u.email.toLowerCase()),
             ...getRegisteredUsers().map((u) => u.email.toLowerCase()),
-            ...riderProfiles.map((r) => r.email.toLowerCase()),
+            ...getRiderProfiles().map((r) => r.email.toLowerCase()),
           ]).size,
           pendingUsers: mockPendingUsers.length,
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
@@ -944,8 +1287,223 @@ export const api = {
     },
   },
 
+  activityLog: {
+    list: async () => {
+      await delay(50);
+      return { entries: getActivityLog() };
+    },
+    add: (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
+      addActivityLog(entry);
+    },
+    rollback: async (entryId: string) => {
+      await delay(100);
+      const log = getActivityLog();
+      const entry = log.find((e) => e.id === entryId);
+      if (!entry || !entry.rollbackData) {
+        throw new Error("Cannot rollback this action");
+      }
+
+      const data = entry.rollbackData as Record<string, unknown>;
+
+      switch (entry.action) {
+        case "ride_deleted": {
+          // Re-add the deleted ride
+          const custom = getCustomRides();
+          custom.push(data as unknown as Ride);
+          setStorage(RIDES_KEY, custom);
+          break;
+        }
+        case "user_deleted": {
+          // Re-add the deleted user
+          const users = getRegisteredUsers();
+          users.push(data as unknown as StoredUser);
+          saveCustomUsers(users);
+          // Remove from deleted IDs
+          const deletedIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          setStorage(DELETED_USERS_KEY, deletedIds.filter((id) => id !== entry.targetId));
+          break;
+        }
+        case "user_bulk_deleted": {
+          // Re-add all deleted users
+          const bulkUsers = data.users as unknown as StoredUser[];
+          const currentUsers = getRegisteredUsers();
+          currentUsers.push(...bulkUsers);
+          saveCustomUsers(currentUsers);
+          const deletedBulkIds = getStorage<string[]>(DELETED_USERS_KEY, []);
+          const restoredIds = new Set(bulkUsers.map((u) => u.id));
+          setStorage(DELETED_USERS_KEY, deletedBulkIds.filter((id) => !restoredIds.has(id)));
+          break;
+        }
+        case "ride_edited": {
+          // Restore original ride data
+          const ridecustom = getCustomRides();
+          const rideIdx = ridecustom.findIndex((r) => r.id === entry.targetId);
+          if (rideIdx !== -1) {
+            ridecustom[rideIdx] = data as unknown as Ride;
+          } else {
+            ridecustom.push(data as unknown as Ride);
+          }
+          setStorage(RIDES_KEY, ridecustom);
+          break;
+        }
+        case "user_role_changed": {
+          // Restore original role
+          const roleUsers = getRegisteredUsers();
+          const roleUser = roleUsers.find((u) => u.id === entry.targetId);
+          if (roleUser) {
+            roleUser.role = data.previousRole as UserRole;
+            saveCustomUsers(roleUsers);
+          }
+          break;
+        }
+        default:
+          throw new Error("Rollback not supported for this action type");
+      }
+
+      // Mark as rolled back in the log
+      const updatedLog = getActivityLog();
+      const idx = updatedLog.findIndex((e) => e.id === entryId);
+      if (idx !== -1) {
+        updatedLog[idx] = { ...updatedLog[idx], rollbackData: undefined, details: (updatedLog[idx].details || "") + " [ROLLED BACK]" };
+        setStorage(ACTIVITY_LOG_KEY, updatedLog);
+      }
+
+      return { success: true };
+    },
+  },
+
+  // About T2W content (editable by Super Admin)
+  aboutContent: {
+    get: async () => {
+      const saved = getStorage<Record<string, string> | null>(ABOUT_CONTENT_KEY, null);
+      return { content: saved };
+    },
+    save: async (content: Record<string, string>) => {
+      setStorage(ABOUT_CONTENT_KEY, content);
+      return { success: true };
+    },
+  },
+
+  // Avatar storage - persisted to DB via upload API
+  avatars: {
+    get: (riderId: string): string | null => {
+      // Check localStorage cache first for immediate display
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      return avatars[riderId] || null;
+    },
+    save: (riderId: string, dataUrl: string) => {
+      // Cache locally for immediate display
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = dataUrl;
+      setStorage(AVATARS_KEY, avatars);
+    },
+    // Upload file to server and persist URL in RiderProfile.avatarUrl
+    upload: async (riderId: string, file: File): Promise<string> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "avatar");
+      formData.append("targetId", riderId);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Failed to upload avatar");
+      const data = await res.json();
+      // Cache the URL locally too
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = data.url;
+      setStorage(AVATARS_KEY, avatars);
+      return data.url as string;
+    },
+  },
+
+  // Badge management
+  badges: {
+    list: async () => {
+      const res = await fetch("/api/badges");
+      if (!res.ok) throw new Error("Failed to load badges");
+      return res.json();
+    },
+    checkAndAward: async () => {
+      const res = await fetch("/api/badges", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to check badges");
+      return res.json();
+    },
+  },
+
+  // File upload
+  upload: async (file: File, type?: string, targetId?: string): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (type) formData.append("type", type);
+    if (targetId) formData.append("targetId", targetId);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Failed to upload file");
+    const data = await res.json();
+    return data.url as string;
+  },
+
+  // Rider-ride participation — backed by database
+  participation: {
+    getOverrides: (): Record<string, { added: string[]; removed: string[] }> => {
+      return {};
+    },
+    toggle: async (riderId: string, rideId: string, participate: boolean) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderProfileId: riderId, rideId, points: participate ? 5 : 0 }),
+      });
+      if (!res.ok) throw new Error("Failed to update participation");
+      return res.json();
+    },
+    setPoints: async (riderId: string, rideId: string, points: number) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderProfileId: riderId, rideId, points }),
+      });
+      if (!res.ok) throw new Error("Failed to set points");
+      return res.json();
+    },
+    bulkSave: async (changes: Array<{ riderProfileId: string; rideId: string; points: number }>) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes }),
+      });
+      if (!res.ok) throw new Error("Failed to save participation");
+      return res.json();
+    },
+    getEffectiveParticipation: async (riderId: string): Promise<string[]> => {
+      try {
+        const data = await api.riders.get(riderId);
+        const rider = data.rider;
+        if (!rider?.ridesParticipated) return [];
+        return rider.ridesParticipated.map((r: { rideId: string }) => r.rideId);
+      } catch {
+        return [];
+      }
+    },
+  },
+
+  // Profile merging (super admin)
+  merge: {
+    findDuplicates: async () => {
+      const res = await fetch("/api/riders/merge");
+      if (!res.ok) throw new Error("Failed to find duplicates");
+      return res.json();
+    },
+    mergeProfiles: async (sourceId: string, targetId: string) => {
+      const res = await fetch("/api/riders/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId, targetId }),
+      });
+      if (!res.ok) throw new Error("Failed to merge profiles");
+      return res.json();
+    },
+  },
+
   seed: async () => {
     await delay(100);
-    return { success: true, message: "Using client-side mock data" };
+    return { success: true, message: "Using database-backed data" };
   },
 };

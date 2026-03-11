@@ -10,6 +10,7 @@ import {
   Trophy,
   Bike,
 } from "lucide-react";
+import { api } from "@/lib/api-client";
 
 const stats = [
   { label: "Active Riders", value: "140", icon: Users },
@@ -20,9 +21,29 @@ const stats = [
 
 export function HeroSection() {
   const [mounted, setMounted] = useState(false);
+  const [nextRide, setNextRide] = useState<{ title: string; date: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    // Fetch rides and find the next upcoming ride based on actual date
+    api.rides.list().then((data: unknown) => {
+      const { rides } = data as { rides: Array<{ title: string; startDate: string; status: string }> };
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const upcoming = rides
+        .filter((r) => r.status === "upcoming" && new Date(r.startDate) >= today)
+        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+      if (upcoming.length > 0) {
+        const ride = upcoming[0];
+        const dateStr = new Date(ride.startDate).toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+        });
+        setNextRide({ title: ride.title, date: dateStr });
+      }
+    }).catch(() => {
+      // Silently fail - badge just won't show
+    });
   }, []);
 
   return (
@@ -41,21 +62,32 @@ export function HeroSection() {
         }}
       />
 
+      {/* Background Logo Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <img
+          src="/logo.png"
+          alt=""
+          className="w-[600px] h-[600px] object-contain opacity-[0.05] sm:w-[700px] sm:h-[700px] lg:w-[800px] lg:h-[800px]"
+        />
+      </div>
+
       <div className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="max-w-4xl">
-          {/* Badge */}
-          <div
-            className={`mb-8 inline-flex items-center gap-2 rounded-full border border-t2w-accent/20 bg-t2w-accent/10 px-4 py-2 transition-all duration-700 ${
-              mounted
-                ? "translate-y-0 opacity-100"
-                : "translate-y-4 opacity-0"
-            }`}
-          >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-t2w-accent" />
-            <span className="text-sm font-medium text-t2w-accent">
-              Next Ride: Coastal Sunrise Sprint &mdash; March 15
-            </span>
-          </div>
+          {/* Badge - dynamically shows next upcoming ride */}
+          {nextRide && (
+            <div
+              className={`mb-8 inline-flex items-center gap-2 rounded-full border border-t2w-accent/20 bg-t2w-accent/10 px-4 py-2 transition-all duration-700 ${
+                mounted
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-4 opacity-0"
+              }`}
+            >
+              <span className="h-2 w-2 animate-pulse rounded-full bg-t2w-accent" />
+              <span className="text-sm font-medium text-t2w-accent">
+                Next Ride: {nextRide.title} &mdash; {nextRide.date}
+              </span>
+            </div>
+          )}
 
           {/* Heading */}
           <h1
@@ -79,7 +111,7 @@ export function HeroSection() {
             }`}
           >
             India&apos;s premier motorcycle riding community, based in Bangalore.
-            Group rides to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa &amp;
+            Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa &amp;
             across India. Join 500+ riders and write your own tale on two wheels.
           </p>
 

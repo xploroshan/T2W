@@ -57,14 +57,9 @@ export function Navbar() {
             <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <div>
-              <span className="font-display text-xl font-bold tracking-tight text-white">
-                T2W
-              </span>
-              <span className="ml-1 hidden text-xs text-t2w-muted sm:inline">
-                Tales on 2 Wheels
-              </span>
-            </div>
+            <span className="text-xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+              Tales on 2 Wheels
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -85,7 +80,7 @@ export function Navbar() {
             ))}
             {user && (
               <Link
-                href="/dashboard"
+                href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                 className="relative rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
                 onMouseEnter={() => setActiveDropdown("My Space")}
                 onMouseLeave={() => setActiveDropdown(null)}
@@ -119,7 +114,7 @@ export function Navbar() {
             ) : user ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                   className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
                 >
                   <User className="h-4 w-4" />
@@ -179,7 +174,7 @@ export function Navbar() {
               ))}
               {user && (
                 <Link
-                  href="/dashboard"
+                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                   onClick={() => setIsOpen(false)}
                   className="rounded-xl px-4 py-3 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                 >
@@ -199,7 +194,7 @@ export function Navbar() {
               {user ? (
                 <>
                   <Link
-                    href="/dashboard"
+                    href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
                     onClick={() => setIsOpen(false)}
                     className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                   >

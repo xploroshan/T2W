@@ -138,14 +138,20 @@ export interface RideRegistration {
   rideId: string;
   userId: string;
   riderName: string;
+  address: string;
   email: string;
   phone: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
   bloodGroup: string;
+  referredBy: string;
+  foodPreference: "vegetarian" | "non-vegetarian" | "";
+  ridingType: "solo" | "rider-with-pillion" | "pillion-rider" | "";
   vehicleModel: string;
   vehicleRegNumber: string;
+  agreedCancellationTerms: boolean;
   agreedIndemnity: boolean;
+  paymentScreenshot: string;
   registeredAt: string;
   confirmationCode: string;
 }

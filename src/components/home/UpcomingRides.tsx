@@ -134,7 +134,7 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
         {/* CTA */}
         {ride.status === "upcoming" && spotsLeft > 0 && (
           <Link
-            href={`/ride?id=${ride.id}`}
+            href={`/ride/${ride.id}`}
             className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-t2w-accent/10 py-3 text-sm font-semibold text-t2w-accent transition-all hover:bg-t2w-accent hover:text-white"
           >
             Register Now
@@ -151,17 +151,32 @@ export function UpcomingRides() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.rides
-      .list()
-      .then((data: any) => {
-        setRides(data.rides);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch rides:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const fetchRides = () => {
+      api.rides
+        .list()
+        .then((data: any) => {
+          setRides(data.rides);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch rides:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+    fetchRides();
+    // Re-fetch when ride data changes (e.g., admin edits rides)
+    const handleStorageUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.key === "t2w_custom_rides") fetchRides();
+    };
+    window.addEventListener("t2w-storage-update", handleStorageUpdate);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "t2w_custom_rides") fetchRides();
+    });
+    return () => {
+      window.removeEventListener("t2w-storage-update", handleStorageUpdate);
+    };
   }, []);
 
   const upcoming = rides.filter((r) => r.status === "upcoming");
@@ -226,7 +241,7 @@ export function UpcomingRides() {
             {recent.map((ride) => (
               <Link
                 key={ride.id}
-                href={`/ride?id=${ride.id}`}
+                href={`/ride/${ride.id}`}
                 className="card-interactive group"
               >
                 <div className="mb-3 flex items-center justify-between">

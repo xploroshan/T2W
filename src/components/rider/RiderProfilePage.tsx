@@ -21,13 +21,65 @@ import {
   Pencil,
   Save,
   X,
+  Plus,
+  Edit3,
+  Trash2,
+  Trophy,
+  Star,
+  Gem,
+  Zap,
+  Crown,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { RiderProfile } from "@/data/rider-profiles";
 
+type Motorcycle = {
+  id: string;
+  make: string;
+  model: string;
+  year: number;
+  cc: number;
+  color: string;
+  nickname?: string | null;
+};
+
+type BadgeTier = {
+  id: string;
+  tier: string;
+  name: string;
+  description: string;
+  minKm: number;
+  icon: string;
+  color: string;
+};
+
+const badgeIcons: Record<string, React.ElementType> = {
+  shield: Shield,
+  award: Award,
+  star: Star,
+  gem: Gem,
+  zap: Zap,
+  crown: Crown,
+};
+
+const emptyMotoForm = {
+  make: "",
+  model: "",
+  year: new Date().getFullYear(),
+  cc: 0,
+  color: "",
+  nickname: "",
+};
+
 export function RiderProfilePage({ riderId }: { riderId: string }) {
   const { user, canEditProfile, isSuperAdmin } = useAuth();
+  const isOwnProfile = user?.linkedRiderId === riderId;
+  // Super admin or own profile can see all personal info (email, phone, address, emergency)
+  const canViewAllPersonalInfo = isSuperAdmin || isOwnProfile;
+  // Riders sharing a ride can see phone + emergency contact only
+  const [sharesRide, setSharesRide] = useState(false);
+  const canViewEmergencyAndPhone = canViewAllPersonalInfo || sharesRide;
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +95,18 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     bloodGroup: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Motorcycle state
+  const [motorcycles, setMotorcycles] = useState<Motorcycle[]>([]);
+  const [motoLoading, setMotoLoading] = useState(false);
+  const [showMotoForm, setShowMotoForm] = useState(false);
+  const [editingMotoId, setEditingMotoId] = useState<string | null>(null);
+  const [motoForm, setMotoForm] = useState(emptyMotoForm);
+  const [motoSaving, setMotoSaving] = useState(false);
+
+  // Badge state
+  const [badgeTiers, setBadgeTiers] = useState<BadgeTier[]>([]);
+  const [earnedBadgeIds, setEarnedBadgeIds] = useState<Set<string>>(new Set());
 
   const canEdit = canEditProfile(riderId);
 
@@ -61,14 +125,38 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           emergencyPhone: d.rider.emergencyPhone,
           bloodGroup: d.rider.bloodGroup,
         });
-        const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
-        if (saved) setAvatarUrl(saved);
-        // Load saved edits
-        const savedEdits = localStorage.getItem(`t2w_profile_${riderId}`);
-        if (savedEdits) {
-          const parsed = JSON.parse(savedEdits);
-          setEditForm((prev) => ({ ...prev, ...parsed }));
-          setRider((prev) => (prev ? { ...prev, ...parsed } : prev));
+        // Check if logged-in user shares a ride with this rider
+        if (user?.linkedRiderId && user.linkedRiderId !== riderId) {
+          api.riders
+            .get(user.linkedRiderId)
+            .then((myData: unknown) => {
+              const myRider = (myData as { rider: RiderProfile }).rider;
+              const viewedRideIds = new Set(
+                d.rider.ridesParticipated.map((r) => r.rideId)
+              );
+              const hasSharedRide = myRider.ridesParticipated.some((r) =>
+                viewedRideIds.has(r.rideId)
+              );
+              setSharesRide(hasSharedRide);
+            })
+            .catch(() => {});
+        }
+        // Load avatar: DB avatarUrl > localStorage cache > legacy localStorage
+        const dbAvatar = d.rider.avatarUrl;
+        const sharedAvatar = api.avatars.get(riderId);
+        const legacyAvatar = typeof window !== "undefined" ? localStorage.getItem(`t2w_avatar_${riderId}`) : null;
+        const avatar = dbAvatar || sharedAvatar || legacyAvatar;
+        if (avatar) setAvatarUrl(avatar);
+        // Auto-migrate: if avatar exists only in localStorage, persist to DB
+        if (!dbAvatar && (sharedAvatar || legacyAvatar)) {
+          const localAvatar = sharedAvatar || legacyAvatar;
+          if (localAvatar && localAvatar.startsWith("data:")) {
+            fetch("/api/upload/avatar-sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ riderId, avatarDataUrl: localAvatar }),
+            }).catch(() => {});
+          }
         }
       })
       .catch((err: unknown) => {
@@ -78,9 +166,87 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [riderId]);
+  }, [riderId, user?.linkedRiderId]);
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Load motorcycles for own profile
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    setMotoLoading(true);
+    api.motorcycles
+      .list()
+      .then((data: { motorcycles: Motorcycle[] }) => setMotorcycles(data.motorcycles || []))
+      .catch(() => {})
+      .finally(() => setMotoLoading(false));
+  }, [isOwnProfile]);
+
+  // Load badge tiers
+  useEffect(() => {
+    api.badges
+      .list()
+      .then((data: { badges: BadgeTier[] }) => {
+        setBadgeTiers(data.badges || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Determine earned badges from rider's totalKm
+  useEffect(() => {
+    if (!rider || badgeTiers.length === 0) return;
+    const earned = new Set<string>();
+    for (const badge of badgeTiers) {
+      if (rider.totalKm >= badge.minKm) {
+        earned.add(badge.id);
+      }
+    }
+    setEarnedBadgeIds(earned);
+  }, [rider, badgeTiers]);
+
+  // Motorcycle CRUD handlers
+  const handleMotoSave = async () => {
+    setMotoSaving(true);
+    try {
+      if (editingMotoId) {
+        const { motorcycle } = await api.motorcycles.update(editingMotoId, motoForm);
+        setMotorcycles((prev) => prev.map((m) => (m.id === editingMotoId ? motorcycle : m)));
+      } else {
+        const { motorcycle } = await api.motorcycles.create(motoForm);
+        setMotorcycles((prev) => [...prev, motorcycle]);
+      }
+      setShowMotoForm(false);
+      setEditingMotoId(null);
+      setMotoForm(emptyMotoForm);
+    } catch (err) {
+      console.error("Motorcycle save failed:", err);
+      alert("Failed to save motorcycle.");
+    } finally {
+      setMotoSaving(false);
+    }
+  };
+
+  const handleMotoEdit = (moto: Motorcycle) => {
+    setEditingMotoId(moto.id);
+    setMotoForm({
+      make: moto.make,
+      model: moto.model,
+      year: moto.year,
+      cc: moto.cc,
+      color: moto.color,
+      nickname: moto.nickname || "",
+    });
+    setShowMotoForm(true);
+  };
+
+  const handleMotoDelete = async (id: string) => {
+    if (!confirm("Remove this motorcycle?")) return;
+    try {
+      await api.motorcycles.delete(id);
+      setMotorcycles((prev) => prev.filter((m) => m.id !== id));
+    } catch {
+      alert("Failed to delete motorcycle.");
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -91,32 +257,40 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       alert("Image must be under 5MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setAvatarUrl(dataUrl);
-      localStorage.setItem(`t2w_avatar_${riderId}`, dataUrl);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Upload to server and persist URL in RiderProfile.avatarUrl
+      const url = await api.avatars.upload(riderId, file);
+      setAvatarUrl(url);
+      // Also update the local rider state
+      if (rider) setRider({ ...rider, avatarUrl: url });
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+      // Fallback: store as base64 in localStorage
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setAvatarUrl(dataUrl);
+        api.avatars.save(riderId, dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
   };
+
+  const [saving, setSaving] = useState(false);
 
   const handleSaveProfile = async () => {
     if (!rider) return;
-    const updates = { ...editForm };
-    // Save to localStorage for rider profile page display
-    localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
-    // Also persist to user record so admin panel and account data stay in sync
+    setSaving(true);
     try {
-      await api.users.update(riderId, {
-        name: updates.name,
-        email: updates.email,
-        phone: updates.phone,
-      });
-    } catch {
-      // User record may not exist yet for static rider profiles; localStorage still persists
+      await api.riders.update(riderId, editForm);
+      setRider({ ...rider, ...editForm });
+      setEditing(false);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      alert("Failed to save profile. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    setRider({ ...rider, ...updates });
-    setEditing(false);
   };
 
   const handleCancelEdit = () => {
@@ -272,22 +446,27 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 </span>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-                {rider.email && (
-                  <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
-                    <Mail className="h-3.5 w-3.5 text-t2w-accent/70" />
-                    <span>{rider.email}</span>
-                  </div>
-                )}
-                {rider.phone && (
-                  <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
-                    <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
-                    <span>{rider.phone}</span>
-                  </div>
-                )}
-              </div>
+              {/* Email: super admin or own profile only */}
+              {canViewAllPersonalInfo && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 sm:justify-start">
+                  {rider.email && (
+                    <div className="flex items-center gap-1.5 text-sm text-t2w-muted">
+                      <Mail className="h-3.5 w-3.5 text-t2w-accent/70" />
+                      <span>{rider.email}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Phone: super admin, own profile, or riders sharing a ride */}
+              {canViewEmergencyAndPhone && rider.phone && (
+                <div className="mt-2 flex items-center gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
+                  <Phone className="h-3.5 w-3.5 text-t2w-accent/70" />
+                  <span>{rider.phone}</span>
+                </div>
+              )}
 
-              {rider.address && (
+              {/* Address: super admin or own profile only */}
+              {canViewAllPersonalInfo && rider.address && (
                 <div className="mt-2 flex items-start gap-1.5 justify-center sm:justify-start text-sm text-t2w-muted">
                   <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-t2w-accent/70" />
                   <span>{rider.address}</span>
@@ -434,10 +613,11 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
             <div className="mt-4 flex gap-3">
               <button
                 onClick={handleSaveProfile}
+                disabled={saving}
                 className="btn-primary flex items-center gap-2"
               >
-                <Save className="h-4 w-4" />
-                Save Changes
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -496,8 +676,8 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
           </div>
         </div>
 
-        {/* Emergency Contact */}
-        {rider.emergencyContact && (
+        {/* Emergency Contact - visible to super admin, own profile, or riders sharing a ride */}
+        {canViewEmergencyAndPhone && rider.emergencyContact && (
           <div className="card mb-8">
             <h3 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-white">
               <Shield className="h-5 w-5 text-red-400" />
@@ -519,6 +699,243 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Badge Progress */}
+        {badgeTiers.length > 0 && (
+          <div className="card mb-8">
+            <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+              <Trophy className="h-5 w-5 text-t2w-gold" />
+              Achievements ({earnedBadgeIds.size}/{badgeTiers.length})
+            </h3>
+
+            {/* Next badge progress */}
+            {(() => {
+              const nextBadge = badgeTiers.find((b) => !earnedBadgeIds.has(b.id));
+              if (!nextBadge) return (
+                <div className="mb-4 rounded-xl bg-gradient-to-r from-t2w-gold/10 to-t2w-accent/10 p-4 text-center">
+                  <Crown className="mx-auto h-8 w-8 text-t2w-gold" />
+                  <p className="mt-2 font-display text-lg font-bold text-white">All Badges Earned!</p>
+                  <p className="text-sm text-t2w-muted">You&apos;ve conquered every milestone.</p>
+                </div>
+              );
+              const prevBadge = badgeTiers.filter((b) => earnedBadgeIds.has(b.id)).pop();
+              const prevKm = prevBadge ? prevBadge.minKm : 0;
+              const progress = Math.min(100, ((rider.totalKm - prevKm) / (nextBadge.minKm - prevKm)) * 100);
+              const kmRemaining = nextBadge.minKm - rider.totalKm;
+              return (
+                <div className="mb-4 rounded-xl bg-t2w-surface-light p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-t2w-muted">Next: <span className="font-medium text-white">{nextBadge.name}</span></span>
+                    <span className="font-mono text-t2w-gold">{kmRemaining.toLocaleString()} km to go</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-t2w-dark">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-t2w-accent to-t2w-gold transition-all duration-500"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right text-xs text-t2w-muted">{Math.round(progress)}%</p>
+                </div>
+              );
+            })()}
+
+            {/* Badge grid */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {badgeTiers.map((badge) => {
+                const earned = earnedBadgeIds.has(badge.id);
+                const IconComp = badgeIcons[badge.icon] || Award;
+                return (
+                  <div
+                    key={badge.id}
+                    className={`relative rounded-xl border p-4 text-center transition-all ${
+                      earned
+                        ? "border-t2w-accent/30 bg-t2w-surface-light"
+                        : "border-t2w-border bg-t2w-dark/50 opacity-50"
+                    }`}
+                  >
+                    <IconComp
+                      className="mx-auto h-8 w-8"
+                      style={{ color: earned ? badge.color : "#4a5568" }}
+                    />
+                    <p className={`mt-2 text-sm font-semibold ${earned ? "text-white" : "text-t2w-muted"}`}>
+                      {badge.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-t2w-muted">
+                      {badge.minKm.toLocaleString()} km
+                    </p>
+                    {earned && (
+                      <div className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] text-white">
+                        ✓
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Motorcycles - own profile only */}
+        {isOwnProfile && (
+          <div className="card mb-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 font-display text-lg font-bold text-white">
+                <Bike className="h-5 w-5 text-t2w-accent" />
+                My Motorcycles ({motorcycles.length})
+              </h3>
+              {!showMotoForm && (
+                <button
+                  onClick={() => {
+                    setEditingMotoId(null);
+                    setMotoForm(emptyMotoForm);
+                    setShowMotoForm(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl bg-t2w-accent/10 px-3 py-1.5 text-sm font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Bike
+                </button>
+              )}
+            </div>
+
+            {/* Add/Edit form */}
+            {showMotoForm && (
+              <div className="mb-4 rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
+                <h4 className="mb-3 text-sm font-semibold text-white">
+                  {editingMotoId ? "Edit Motorcycle" : "Add New Motorcycle"}
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Make *</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Royal Enfield"
+                      value={motoForm.make}
+                      onChange={(e) => setMotoForm({ ...motoForm, make: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Model *</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Himalayan 450"
+                      value={motoForm.model}
+                      onChange={(e) => setMotoForm({ ...motoForm, model: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Year</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={motoForm.year}
+                      onChange={(e) => setMotoForm({ ...motoForm, year: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Engine (cc)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      placeholder="e.g. 450"
+                      value={motoForm.cc || ""}
+                      onChange={(e) => setMotoForm({ ...motoForm, cc: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Color</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. Slate Himalayan Blue"
+                      value={motoForm.color}
+                      onChange={(e) => setMotoForm({ ...motoForm, color: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-t2w-muted">Nickname</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. The Beast"
+                      value={motoForm.nickname}
+                      onChange={(e) => setMotoForm({ ...motoForm, nickname: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={handleMotoSave}
+                    disabled={motoSaving || !motoForm.make || !motoForm.model}
+                    className="btn-primary flex items-center gap-2 text-sm"
+                  >
+                    {motoSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {motoSaving ? "Saving..." : editingMotoId ? "Update" : "Add Motorcycle"}
+                  </button>
+                  <button
+                    onClick={() => { setShowMotoForm(false); setEditingMotoId(null); setMotoForm(emptyMotoForm); }}
+                    className="rounded-xl bg-t2w-dark px-4 py-2 text-sm text-t2w-muted hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Motorcycle list */}
+            {motoLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-t2w-accent" />
+              </div>
+            ) : motorcycles.length === 0 ? (
+              <p className="py-6 text-center text-t2w-muted">
+                No motorcycles added yet. Add your first bike!
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {motorcycles.map((moto) => (
+                  <div
+                    key={moto.id}
+                    className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-t2w-accent/10">
+                      <Bike className="h-5 w-5 text-t2w-accent" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-white">
+                        {moto.make} {moto.model}
+                        {moto.nickname && (
+                          <span className="ml-2 text-sm font-normal text-t2w-muted">
+                            &quot;{moto.nickname}&quot;
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-t2w-muted">
+                        {moto.year} {moto.cc ? `· ${moto.cc}cc` : ""} {moto.color ? `· ${moto.color}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        onClick={() => handleMotoEdit(moto)}
+                        className="rounded-lg p-2 text-t2w-muted hover:bg-t2w-dark hover:text-white"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMotoDelete(moto.id)}
+                        className="rounded-lg p-2 text-t2w-muted hover:bg-red-500/10 hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -544,7 +961,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 .map((ride) => (
                   <Link
                     key={ride.rideId}
-                    href={`/ride?id=${ride.rideId}`}
+                    href={`/ride/${ride.rideId}`}
                     className="flex items-center gap-4 rounded-xl bg-t2w-surface-light p-4 transition-all hover:bg-t2w-surface-light/80 hover:ring-1 hover:ring-t2w-accent/30"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-t2w-accent/10 font-mono text-sm font-bold text-t2w-accent">

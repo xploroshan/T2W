@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title:
     "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
   description:
-    "Join India's #1 motorcycle riding community. Group rides from Bangalore to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa & across India. 500+ riders, 120+ rides completed, 2.5 lakh km covered. Register for upcoming rides today!",
+    "Join India's #1 motorcycle riding community. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. 500+ riders, 120+ rides completed, 2.5 lakh km covered. Register for upcoming rides today!",
   keywords: [
     "motorcycle rides Bangalore",
     "bike rides near Bangalore",
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "Royal Enfield rides Bangalore",
   ],
   alternates: {
-    canonical: "https://talesontwowheels.com",
+    canonical: "https://taleson2wheels.com",
   },
 };
 
@@ -53,7 +53,7 @@ function EventSchemas() {
     organizer: {
       "@type": "Organization",
       name: "Tales on 2 Wheels",
-      url: "https://talesontwowheels.com",
+      url: "https://taleson2wheels.com",
     },
     offers: {
       "@type": "Offer",
@@ -63,12 +63,12 @@ function EventSchemas() {
         ride.registeredRiders < ride.maxRiders
           ? "https://schema.org/InStock"
           : "https://schema.org/SoldOut",
-      url: `https://talesontwowheels.com/ride?id=${ride.id}`,
+      url: `https://taleson2wheels.com/ride/${ride.id}`,
       validFrom: "2026-01-01",
     },
     maximumAttendeeCapacity: ride.maxRiders,
     remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
-    image: "https://talesontwowheels.com/og-image.jpg",
+    image: "https://taleson2wheels.com/og-image.jpg",
     performer: {
       "@type": "Person",
       name: ride.leadRider,

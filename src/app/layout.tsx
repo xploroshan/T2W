@@ -5,14 +5,14 @@ import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://talesontwowheels.com"),
+  metadataBase: new URL("https://taleson2wheels.com"),
   title: {
     default:
       "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
     template: "%s | T2W - Tales on 2 Wheels",
   },
   description:
-    "India's premier motorcycle riding community based in Bangalore. Join group rides to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa & across India. Register for upcoming motorcycle tours, earn badges, and connect with passionate riders. Tales on 2 Wheels - where every ride tells a story.",
+    "India’s premier motorcycle riding community based in Bangalore, Karnataka. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. Every ride tells a story.. Tales on 2 Wheels - where every ride tells a story.",
   keywords: [
     "motorcycle rides Bangalore",
     "group riding Bangalore",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     "motorcycle club Karnataka",
     "Tales on 2 Wheels",
     "T2W rides",
-    "motorcycle travel India",
+    "BMW GS travel India",
     "riding community India",
     "bike trips from Bangalore",
     "motorcycle rides near me",
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
     "Hampi bike ride",
     "Western Ghats motorcycle ride",
     "South India bike tours",
-    "motorcycle rides Mumbai",
-    "motorcycle rides Pune",
+    "Bengaluru Motorcycle Club",
+    "Bangalore Motorcycle Club",
     "Ladakh bike trip",
     "Spiti Valley motorcycle ride",
     "best motorcycle rides India",
@@ -50,12 +50,12 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://talesontwowheels.com",
+    url: "https://taleson2wheels.com",
     siteName: "Tales on 2 Wheels",
     title:
       "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & Across India",
     description:
-      "Join India's premier motorcycle riding community. Discover epic group rides from Bangalore, Mumbai & across India. Register for upcoming tours and connect with passionate riders.",
+      "Join India's premier motorcycle riding community. Discover epic group rides from Bangalore & across India. Register for upcoming tours and connect with passionate riders.",
     images: [
       {
         url: "/og-image.jpg",
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "T2W - Tales on 2 Wheels | Motorcycle Rides India",
     description:
-      "India's premier motorcycle riding community. Group rides from Bangalore, Mumbai & across India. Every ride tells a story.",
+      "India's premier motorcycle riding community. Group rides from Bangalore & across India. Every ride tells a story.",
     images: ["/og-image.jpg"],
   },
   robots: {
@@ -83,20 +83,35 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  manifest: "/site.webmanifest",
   alternates: {
-    canonical: "https://talesontwowheels.com",
+    canonical: "https://taleson2wheels.com",
   },
   category: "Sports & Recreation",
+  other: {
+    "msapplication-TileColor": "#0f0f0f",
+    "theme-color": "#e94560",
+  },
 };
 
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "@id": "https://talesontwowheels.com/#organization",
+  "@id": "https://taleson2wheels.com/#organization",
   name: "Tales on 2 Wheels",
   alternateName: ["T2W", "Tales on Two Wheels"],
-  url: "https://talesontwowheels.com",
-  logo: "https://talesontwowheels.com/logo.png",
+  url: "https://taleson2wheels.com",
+  logo: "https://taleson2wheels.com/logo.png",
   description:
     "India's premier motorcycle riding community based in Bangalore. Organizing group rides, motorcycle tours, and building a passionate riding community across India since 2023.",
   foundingDate: "2023",
@@ -124,24 +139,24 @@ const organizationSchema = {
     },
     {
       "@type": "City",
-      name: "Mumbai",
+      name: "Mysore",
     },
     {
       "@type": "City",
-      name: "Pune",
+      name: "Mangalore",
     },
   ],
   contactPoint: {
     "@type": "ContactPoint",
-    email: "ride@talesontwowheels.com",
+    email: "ride@taleson2wheels.com",
     telephone: "+919876543210",
     contactType: "customer service",
     availableLanguage: ["English", "Hindi", "Kannada"],
   },
   sameAs: [
-    "https://instagram.com/talesontwowheels",
-    "https://youtube.com/@talesontwowheels",
-    "https://facebook.com/talesontwowheels",
+    "https://instagram.com/taleson2wheels",
+    "https://youtube.com/@taleson2wheels",
+    "https://facebook.com/taleson2wheels",
   ],
   numberOfEmployees: {
     "@type": "QuantitativeValue",
@@ -152,25 +167,25 @@ const organizationSchema = {
 const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "@id": "https://talesontwowheels.com/#website",
-  url: "https://talesontwowheels.com",
+  "@id": "https://taleson2wheels.com/#website",
+  url: "https://taleson2wheels.com",
   name: "Tales on 2 Wheels",
   description:
     "Motorcycle riding community platform for group rides across India",
-  publisher: { "@id": "https://talesontwowheels.com/#organization" },
+  publisher: { "@id": "https://taleson2wheels.com/#organization" },
   inLanguage: "en-IN",
 };
 
 const localBusinessSchema = {
   "@context": "https://schema.org",
   "@type": "SportsActivityLocation",
-  "@id": "https://talesontwowheels.com/#localbusiness",
+  "@id": "https://taleson2wheels.com/#localbusiness",
   name: "Tales on 2 Wheels - Bangalore",
   description:
     "Motorcycle riding community organizing group rides from Bangalore to destinations across Karnataka and India. Weekly rides, weekend getaways, and multi-day expeditions.",
-  url: "https://talesontwowheels.com",
+  url: "https://taleson2wheels.com",
   telephone: "+919876543210",
-  email: "ride@talesontwowheels.com",
+  email: "ride@taleson2wheels.com",
   address: {
     "@type": "PostalAddress",
     streetAddress: "Brigade Road",
@@ -203,25 +218,25 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://talesontwowheels.com",
+      item: "https://taleson2wheels.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Rides",
-      item: "https://talesontwowheels.com/rides",
+      item: "https://taleson2wheels.com/rides",
     },
     {
       "@type": "ListItem",
       position: 3,
       name: "Blogs",
-      item: "https://talesontwowheels.com/blogs",
+      item: "https://taleson2wheels.com/blogs",
     },
     {
       "@type": "ListItem",
       position: 4,
       name: "Guidelines",
-      item: "https://talesontwowheels.com/guidelines",
+      item: "https://taleson2wheels.com/guidelines",
     },
   ],
 };
@@ -232,8 +247,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en-IN">
       <head>
+        <meta name="theme-color" content="#e94560" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -241,7 +257,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Courgette&family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
         <script
