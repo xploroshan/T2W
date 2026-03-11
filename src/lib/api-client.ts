@@ -698,8 +698,23 @@ export const api = {
       await delay(100);
       const users = getRegisteredUsers();
       const crewRoles = new Set(["superadmin", "core_member"]);
+
+      // Fetch rider profiles from DB for avatar URLs
+      let riderAvatars: Record<string, string> = {};
+      try {
+        const ridersRes = await fetch("/api/riders");
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          for (const r of data.riders || []) {
+            if (r.avatarUrl) riderAvatars[r.id] = r.avatarUrl;
+          }
+        }
+      } catch { /* ignore */ }
+
       const crew = users
         .filter((u) => crewRoles.has(u.role))
+        // Hide "T2W Official" system account from crew display
+        .filter((u) => !u.email.toLowerCase().includes("taleson2wheels.official"))
         .map((u) => {
           // Try to resolve linkedRiderId by email if not set
           const riderId = u.linkedRiderId || findRiderByEmail(u.email)?.id;
@@ -708,6 +723,7 @@ export const api = {
             name: u.name,
             role: u.role,
             linkedRiderId: riderId,
+            avatarUrl: riderId ? (riderAvatars[riderId] || null) : null,
           };
         });
       return { crew };
