@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Heart,
   Target,
@@ -23,6 +24,7 @@ interface CrewMember {
   name: string;
   role: string;
   linkedRiderId?: string;
+  avatarUrl?: string | null;
 }
 
 const DEFAULT_ABOUT = {
@@ -109,25 +111,32 @@ export function AboutContact() {
 
   // Build crew display list
   const crewDisplay = crewMembers.length > 0
-    ? crewMembers.map((m) => ({
-        name: m.name,
-        role: ROLE_LABELS[m.role] || m.role,
-        initials: m.name
-          .split(" ")
-          .map((n) => n[0])
-          .join("")
-          .toUpperCase()
-          .slice(0, 2),
-        riderId: m.linkedRiderId,
-        avatarUrl: m.linkedRiderId ? api.avatars.get(m.linkedRiderId) : null,
-      }))
+    ? crewMembers.map((m) => {
+        // Avatar: prefer DB-backed URL from API, fallback to localStorage
+        const localAvatar = m.linkedRiderId ? api.avatars.get(m.linkedRiderId) : null;
+        const legacyAvatar = m.linkedRiderId && typeof window !== "undefined"
+          ? localStorage.getItem(`t2w_avatar_${m.linkedRiderId}`)
+          : null;
+        return {
+          name: m.name,
+          role: ROLE_LABELS[m.role] || m.role,
+          initials: m.name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2),
+          riderId: m.linkedRiderId,
+          avatarUrl: m.avatarUrl || localAvatar || legacyAvatar,
+        };
+      })
     : [
         // Fallback static list
-        { name: "Roshan Manuel", role: "Founder & Lead Organiser", initials: "RM", riderId: undefined, avatarUrl: null },
-        { name: "Sanjeev Kumar", role: "Co-Founder & Sweep Rider", initials: "SK", riderId: undefined, avatarUrl: null },
-        { name: "Jay Trivedi", role: "Ride Organiser & Pilot", initials: "JT", riderId: undefined, avatarUrl: null },
-        { name: "Shreyas BM", role: "Ride Organiser", initials: "SB", riderId: undefined, avatarUrl: null },
-        { name: "Harish Mysuru", role: "Ride Organiser & Accounts", initials: "HM", riderId: undefined, avatarUrl: null },
+        { name: "Roshan Manuel", role: "Founder & Lead Organiser", initials: "RM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Sanjeev Kumar", role: "Co-Founder & Sweep Rider", initials: "SK", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Jay Trivedi", role: "Ride Organiser & Pilot", initials: "JT", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Shreyas BM", role: "Ride Organiser", initials: "SB", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Harish Mysuru", role: "Ride Organiser & Accounts", initials: "HM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
       ];
 
   return (
@@ -206,26 +215,41 @@ export function AboutContact() {
             <h3 className="mb-8 font-display text-2xl font-bold text-white">
               The Crew
             </h3>
-            <div className="flex flex-wrap items-center justify-center gap-6">
-              {crewDisplay.map((member) => (
-                <div key={member.name} className="group text-center">
-                  <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-t2w-accent to-red-600 font-display text-xl font-bold text-white transition-transform group-hover:scale-110">
-                    {member.avatarUrl ? (
-                      <img
-                        src={member.avatarUrl}
-                        alt={member.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      member.initials
-                    )}
+            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-4xl mx-auto">
+              {crewDisplay.map((member) => {
+                const content = (
+                  <>
+                    <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-t2w-accent to-red-600 font-display text-xl font-bold text-white transition-transform group-hover:scale-110">
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        member.initials
+                      )}
+                    </div>
+                    <h4 className="text-sm font-semibold text-white">
+                      {member.name}
+                    </h4>
+                    <p className="text-xs text-t2w-muted">{member.role}</p>
+                  </>
+                );
+                return member.riderId ? (
+                  <Link
+                    key={member.name}
+                    href={`/rider/${member.riderId}`}
+                    className="group text-center transition-opacity hover:opacity-90"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div key={member.name} className="group text-center">
+                    {content}
                   </div>
-                  <h4 className="text-sm font-semibold text-white">
-                    {member.name}
-                  </h4>
-                  <p className="text-xs text-t2w-muted">{member.role}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
