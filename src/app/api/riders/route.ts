@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       sweepsDone: p.sweepsDone,
       pilotsDone: p.pilotsDone,
       mergedIntoId: p.mergedIntoId,
-      userRole: p.linkedUsers[0]?.role || null,
+      userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
       ridesCompleted: p.participations.length,
       totalKm: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
       totalPoints: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
