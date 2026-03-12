@@ -989,7 +989,7 @@ export function AdminPage() {
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-display text-xl font-bold text-white">Manage Rides</h3>
               {canCreateRide && (
-                <button onClick={() => setShowAddRide(!showAddRide)} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
+                <button onClick={() => { const next = `#${String(rides.length + 1).padStart(3, "0")}`; setRideForm((prev) => ({ ...prev, rideNumber: next })); setShowAddRide(!showAddRide); }} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
                   <Plus className="h-4 w-4" />
                   Add New Ride
                 </button>
@@ -1001,7 +1001,7 @@ export function AdminPage() {
                 <h3 className="mb-6 font-display text-lg font-bold text-white">Create New Ride</h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" placeholder="e.g., Coastal Sunrise Sprint" value={rideForm.title} onChange={(e) => setRideForm({ ...rideForm, title: e.target.value })} /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" placeholder="#029" value={rideForm.rideNumber} onChange={(e) => setRideForm({ ...rideForm, rideNumber: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field bg-t2w-surface-light/50 cursor-not-allowed" readOnly value={rideForm.rideNumber} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer" value={rideForm.type} onChange={(e) => setRideForm({ ...rideForm, type: e.target.value })}><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={rideForm.startDate} onChange={(e) => setRideForm({ ...rideForm, startDate: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={rideForm.endDate} onChange={(e) => setRideForm({ ...rideForm, endDate: e.target.value })} /></div>

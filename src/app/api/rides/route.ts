@@ -74,12 +74,9 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json();
 
-    // Auto-generate ride number
-    const lastRide = await prisma.ride.findFirst({
-      orderBy: { rideNumber: "desc" },
-    });
-    const lastNum = lastRide ? parseInt(lastRide.rideNumber.replace("#", "")) : 0;
-    const rideNumber = `#${String(lastNum + 1).padStart(3, "0")}`;
+    // Auto-generate ride number based on total ride count
+    const totalRides = await prisma.ride.count();
+    const rideNumber = data.rideNumber || `#${String(totalRides + 1).padStart(3, "0")}`;
 
     const ride = await prisma.ride.create({
       data: {
