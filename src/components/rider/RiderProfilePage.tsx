@@ -261,8 +261,9 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       // Upload to server and persist URL in RiderProfile.avatarUrl
       const url = await api.avatars.upload(riderId, file);
       setAvatarUrl(url);
-      // Also update the local rider state
       if (rider) setRider({ ...rider, avatarUrl: url });
+      // Also cache locally
+      api.avatars.save(riderId, url);
     } catch (err) {
       console.error("Avatar upload failed:", err);
       // Fallback: convert to base64 and persist to DB via avatar-sync
@@ -271,7 +272,6 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         const dataUrl = reader.result as string;
         setAvatarUrl(dataUrl);
         api.avatars.save(riderId, dataUrl);
-        // Also persist to DB so other devices can see it
         fetch("/api/upload/avatar-sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -279,6 +279,27 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         }).catch(() => {});
       };
       reader.readAsDataURL(file);
+    }
+    // Reset file input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!confirm("Remove your profile picture?")) return;
+    try {
+      // Send null to API to clear the avatar in DB (api.riders.update accepts Record<string, unknown>)
+      const res = await fetch(`/api/riders/${riderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setAvatarUrl(null);
+      if (rider) setRider({ ...rider, avatarUrl: undefined });
+      // Clear localStorage cache
+      api.avatars.save(riderId, "");
+    } catch {
+      alert("Failed to remove profile picture.");
     }
   };
 
@@ -419,11 +440,12 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                   </div>
                 )}
               </div>
-              {canEdit && (
+              {canEdit && editing && (
                 <>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                    title="Change profile picture"
                   >
                     <Camera className="h-6 w-6 text-white" />
                   </button>
@@ -434,6 +456,15 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                     onChange={handleAvatarUpload}
                     className="hidden"
                   />
+                  {avatarUrl && (
+                    <button
+                      onClick={handleAvatarDelete}
+                      className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition-transform hover:scale-110"
+                      title="Remove profile picture"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
