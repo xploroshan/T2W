@@ -1092,12 +1092,39 @@ export function AdminPage() {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-display text-xl font-bold text-white">Manage Rides</h3>
-              {canCreateRide && (
-                <button onClick={() => { const next = `#${String(rides.length + 1).padStart(3, "0")}`; setRideForm((prev) => ({ ...prev, rideNumber: next })); setShowAddRide(!showAddRide); }} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
-                  <Plus className="h-4 w-4" />
-                  Add New Ride
-                </button>
-              )}
+              <div className="flex gap-2">
+                {isSuperAdmin && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Clear ALL drop-out flags from all rides? This will reinstate all riders.")) return;
+                      try {
+                        const result = await api.participation.clearAllDropouts();
+                        alert(`Cleared ${result.clearedCount} drop-out flags.`);
+                        api.activityLog.add({
+                          action: "ride_edited",
+                          performedBy: user!.id,
+                          performedByName: user!.name,
+                          targetId: "all-rides",
+                          targetName: "All rides",
+                          details: `Cleared ${result.clearedCount} drop-out flags from all rides`,
+                        });
+                      } catch {
+                        alert("Failed to clear drop-outs.");
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-yellow-400/10 px-3 py-2 text-xs font-medium text-yellow-400 transition-colors hover:bg-yellow-400/20"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Clear All Drop-Outs
+                  </button>
+                )}
+                {canCreateRide && (
+                  <button onClick={() => { const next = `#${String(rides.length + 1).padStart(3, "0")}`; setRideForm((prev) => ({ ...prev, rideNumber: next })); setShowAddRide(!showAddRide); }} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
+                    <Plus className="h-4 w-4" />
+                    Add New Ride
+                  </button>
+                )}
+              </div>
             </div>
 
             {showAddRide && canCreateRide && (

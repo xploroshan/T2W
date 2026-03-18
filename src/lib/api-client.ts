@@ -830,6 +830,11 @@ export const api = {
       if (!res.ok) throw new Error("Failed to update drop-out status");
       return res.json();
     },
+    clearAllDropouts: async () => {
+      const res = await fetch("/api/riders/clear-dropouts", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to clear dropouts");
+      return res.json();
+    },
     bulkSave: async (changes: Array<{ riderProfileId: string; rideId: string; points: number }>) => {
       const res = await fetch("/api/riders/participation", {
         method: "POST",
