@@ -36,53 +36,58 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Also include rider profiles that don't have a User account
-    // so admin can see all people in the system
-    const userLinkedIds = new Set(
-      users.filter((u) => u.linkedRiderId).map((u) => u.linkedRiderId!)
-    );
-    const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    // Only include unlinked rider profiles when listing ALL users (no status filter)
+    // When filtering by pending/active, only return actual User accounts
+    let combined = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      isApproved: u.isApproved,
+      joinDate: u.joinDate?.toISOString().split("T")[0] ?? u.createdAt.toISOString().split("T")[0],
+      linkedRiderId: u.linkedRiderId,
+      phone: u.phone,
+      hasAccount: true,
+    }));
 
-    const unlinkedRiders = await prisma.riderProfile.findMany({
-      where: {
-        mergedIntoId: null,
-        id: { notIn: [...userLinkedIds] },
-        email: { notIn: [...userEmails] },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        joinDate: true,
-        phone: true,
-      },
-    });
+    if (!status) {
+      // Include rider profiles that don't have a User account
+      const userLinkedIds = new Set(
+        users.filter((u) => u.linkedRiderId).map((u) => u.linkedRiderId!)
+      );
+      const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
 
-    const combined = [
-      ...users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        isApproved: u.isApproved,
-        joinDate: u.joinDate?.toISOString().split("T")[0] ?? u.createdAt.toISOString().split("T")[0],
-        linkedRiderId: u.linkedRiderId,
-        phone: u.phone,
-        hasAccount: true,
-      })),
-      ...unlinkedRiders.map((r) => ({
-        id: r.id,
-        name: r.name,
-        email: r.email,
-        role: r.role || "rider",
-        isApproved: true, // rider profiles are inherently approved
-        joinDate: r.joinDate?.toISOString().split("T")[0] ?? "2024-03-16",
-        linkedRiderId: r.id,
-        phone: r.phone,
-        hasAccount: false,
-      })),
-    ];
+      const unlinkedRiders = await prisma.riderProfile.findMany({
+        where: {
+          mergedIntoId: null,
+          id: { notIn: [...userLinkedIds] },
+          email: { notIn: [...userEmails] },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          joinDate: true,
+          phone: true,
+        },
+      });
+
+      combined = [
+        ...combined,
+        ...unlinkedRiders.map((r) => ({
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          role: r.role || "rider",
+          isApproved: true,
+          joinDate: r.joinDate?.toISOString().split("T")[0] ?? "2024-03-16",
+          linkedRiderId: r.id,
+          phone: r.phone,
+          hasAccount: false,
+        })),
+      ];
+    }
 
     return NextResponse.json({
       users: combined,

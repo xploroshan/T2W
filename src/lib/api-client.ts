@@ -131,6 +131,15 @@ export const api = {
       if (!res.ok) throw new Error("Failed to reject user");
       return res.json();
     },
+    bulkApprove: async (ids: string[]) => {
+      const res = await fetch("/api/users/bulk-approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error("Failed to approve users");
+      return res.json();
+    },
     // Change role (SuperAdmin only) – persisted to DB
     changeRole: async (id: string, newRole: UserRole) => {
       const res = await fetch("/api/users/role", {
