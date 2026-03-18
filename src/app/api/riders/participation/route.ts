@@ -89,11 +89,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/riders/participation - mark a rider as dropped out (or reinstate)
+// PATCH /api/riders/participation - mark a rider as dropped out (superadmin only)
 export async function PATCH(req: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+    if (!user || user.role !== "superadmin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -131,10 +131,8 @@ async function syncUserStats(riderProfileId: string) {
     include: { ride: { select: { distanceKm: true } } },
   });
 
-  // Exclude dropped-out participations from stats
-  const active = participations.filter((p: typeof participations[number]) => !p.droppedOut);
-  const totalKm = active.reduce((sum: number, p: typeof participations[number]) => sum + p.ride.distanceKm, 0);
-  const ridesCompleted = active.length;
+  const totalKm = participations.reduce((sum: number, p: typeof participations[number]) => sum + p.ride.distanceKm, 0);
+  const ridesCompleted = participations.length;
 
   for (const u of linkedUsers) {
     const updateData: Record<string, unknown> = { totalKm, ridesCompleted };

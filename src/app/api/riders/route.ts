@@ -79,8 +79,8 @@ export async function GET(req: NextRequest) {
 
     const riders = profiles.map((p: typeof profiles[number]) => {
       const stats = computeRideRoleStats(p.name, allRides);
-      // Filter out dropped-out participations for stats
-      const activeParticipations = p.participations.filter((pp: typeof p.participations[number]) => !pp.droppedOut);
+      // All participations are active (dropouts cleared)
+      const activeParticipations = p.participations;
       return {
       id: p.id,
       name: p.name,
@@ -105,10 +105,10 @@ export async function GET(req: NextRequest) {
         rideDate: pp.ride.startDate.toISOString(),
         distanceKm: pp.ride.distanceKm,
         points: pp.points,
-        droppedOut: pp.droppedOut,
+        droppedOut: false,
       })),
       participationMap: Object.fromEntries(
-        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.droppedOut ? "dropped" : pp.points])
+        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
       ),
     };
     });
