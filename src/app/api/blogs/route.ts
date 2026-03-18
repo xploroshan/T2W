@@ -33,14 +33,18 @@ export async function POST(req: NextRequest) {
       title,
       excerpt,
       content,
+      authorId,
       authorName,
+      authorAvatar,
       publishDate,
+      coverImage,
       tags,
       type,
       isVlog,
       videoUrl,
       readTime,
       likes,
+      approvalStatus,
     } = data;
 
     const blog = await prisma.blogPost.create({
@@ -48,14 +52,18 @@ export async function POST(req: NextRequest) {
         title,
         excerpt,
         content,
+        authorId: authorId || null,
         authorName,
+        authorAvatar: authorAvatar || null,
         publishDate: publishDate ? new Date(publishDate) : new Date(),
+        coverImage: coverImage || null,
         tags: tags ? JSON.stringify(tags) : "[]",
         type: type || "blog",
         isVlog: isVlog || false,
         videoUrl: videoUrl || null,
         readTime: readTime || 0,
         likes: likes || 0,
+        approvalStatus: approvalStatus || "pending",
       },
     });
 
