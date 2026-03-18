@@ -144,6 +144,8 @@ export function AdminPage() {
   const [userSort, setUserSort] = useState<"name" | "email" | "role" | "joined">("name");
   const [userSortDir, setUserSortDir] = useState<"asc" | "desc">("asc");
   const [deletingUsers, setDeletingUsers] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [bulkRejecting, setBulkRejecting] = useState(false);
 
   const [rideForm, setRideForm] = useState({
     title: "", rideNumber: "", type: "day", startDate: "", endDate: "",
@@ -846,22 +848,65 @@ export function AdminPage() {
                     <button
                       onClick={async () => {
                         if (!confirm(`Approve all ${pendingUsers.length} pending users?`)) return;
-                        for (const u of pendingUsers) { await approveUser(u.id); }
+                        setBulkApproving(true);
+                        try {
+                          const ids = pendingUsers.map((u) => u.id);
+                          await api.users.bulkApprove(ids);
+                          setPendingUsers([]);
+                          if (stats) setStats({ ...stats, pendingUsers: 0 });
+                          api.activityLog.add({
+                            action: "user_approved",
+                            performedBy: user!.id,
+                            performedByName: user!.name,
+                            targetId: "bulk",
+                            targetName: `${ids.length} users`,
+                            details: `Bulk approved ${ids.length} pending users`,
+                          });
+                          setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_approved", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: "bulk", targetName: `${ids.length} users`, details: `Bulk approved ${ids.length} pending users` }, ...prev]);
+                        } catch (err) {
+                          console.error("Bulk approve failed:", err);
+                          alert("Failed to approve users. Please try again.");
+                        } finally {
+                          setBulkApproving(false);
+                        }
                       }}
-                      className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs font-medium text-green-400 transition-colors hover:bg-green-400/20"
+                      disabled={bulkApproving || bulkRejecting}
+                      className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs font-medium text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
                     >
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Approve All
+                      {bulkApproving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                      {bulkApproving ? "Approving..." : "Approve All"}
                     </button>
                     <button
                       onClick={async () => {
                         if (!confirm(`Reject all ${pendingUsers.length} pending users? This will delete their accounts.`)) return;
-                        for (const u of pendingUsers) { await rejectUser(u.id); }
+                        setBulkRejecting(true);
+                        try {
+                          const ids = pendingUsers.map((u) => u.id);
+                          await api.users.bulkDelete(ids);
+                          const count = pendingUsers.length;
+                          setPendingUsers([]);
+                          if (stats) setStats({ ...stats, pendingUsers: 0, totalUsers: stats.totalUsers - count });
+                          api.activityLog.add({
+                            action: "user_bulk_deleted",
+                            performedBy: user!.id,
+                            performedByName: user!.name,
+                            targetId: "bulk",
+                            targetName: `${count} pending users`,
+                            details: `Bulk rejected (deleted) ${count} pending users`,
+                          });
+                          setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "user_bulk_deleted", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: "bulk", targetName: `${count} pending users`, details: `Bulk rejected (deleted) ${count} pending users` }, ...prev]);
+                        } catch (err) {
+                          console.error("Bulk reject failed:", err);
+                          alert("Failed to reject users. Please try again.");
+                        } finally {
+                          setBulkRejecting(false);
+                        }
                       }}
-                      className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20"
+                      disabled={bulkApproving || bulkRejecting}
+                      className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
                     >
-                      <XCircle className="h-3.5 w-3.5" />
-                      Reject All
+                      {bulkRejecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                      {bulkRejecting ? "Rejecting..." : "Reject All"}
                     </button>
                   </div>
                 </div>
