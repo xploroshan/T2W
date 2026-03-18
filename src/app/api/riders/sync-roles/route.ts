@@ -46,6 +46,19 @@ export async function POST() {
         data: { role: "t2w_rider" },
       });
       upgradedCount = result.count;
+
+      // Also sync RiderProfile.role for upgraded users
+      const upgradedUsers = await prisma.user.findMany({
+        where: { id: { in: upgradeIds }, linkedRiderId: { not: null } },
+        select: { linkedRiderId: true },
+      });
+      const riderIdsToUpgrade = upgradedUsers.map((u) => u.linkedRiderId!);
+      if (riderIdsToUpgrade.length > 0) {
+        await prisma.riderProfile.updateMany({
+          where: { id: { in: riderIdsToUpgrade }, role: "rider" },
+          data: { role: "t2w_rider" },
+        });
+      }
     }
 
     // 3. Downgrade users with "t2w_rider" who have NO participations back to "rider"
@@ -75,6 +88,19 @@ export async function POST() {
         data: { role: "rider" },
       });
       downgradedCount = result.count;
+
+      // Also sync RiderProfile.role for downgraded users
+      const downgradedUsers = await prisma.user.findMany({
+        where: { id: { in: downgradeIds }, linkedRiderId: { not: null } },
+        select: { linkedRiderId: true },
+      });
+      const riderIdsToDowngrade = downgradedUsers.map((u) => u.linkedRiderId!);
+      if (riderIdsToDowngrade.length > 0) {
+        await prisma.riderProfile.updateMany({
+          where: { id: { in: riderIdsToDowngrade }, role: "t2w_rider" },
+          data: { role: "rider" },
+        });
+      }
     }
 
     // 4. Recalculate stats for all users with linked profiles
