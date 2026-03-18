@@ -187,25 +187,29 @@ model RideRegistration {
 }
 
 model BlogPost {
-  id          String   @id @default(cuid())
-  title       String
-  excerpt     String
-  content     String
-  authorId    String?
-  authorName  String
-  authorAvatar String?
-  publishDate DateTime @default(now())
-  coverImage  String?
-  tags        String   // JSON array stored as string
-  type        String   // official | personal
-  isVlog      Boolean  @default(false)
-  videoUrl    String?
-  readTime    Int
-  likes       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  excerpt        String
+  content        String
+  authorId       String?
+  authorName     String
+  authorAvatar   String?
+  publishDate    DateTime @default(now())
+  coverImage     String?
+  tags           String   // JSON array stored as string
+  type           String   // official | personal
+  isVlog         Boolean  @default(false)
+  videoUrl       String?
+  readTime       Int
+  likes          Int      @default(0)
+  approvalStatus String   @default("approved") // pending | approved | rejected
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([approvalStatus])
 }
 
 model Notification {
