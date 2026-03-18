@@ -90,7 +90,7 @@ export async function GET(
         riderProfileId: p.riderProfile.id,
         riderName: p.riderProfile.name,
         riderAvatar: p.riderProfile.avatarUrl,
-        droppedOut: ride.status === "completed" ? false : p.droppedOut,
+        droppedOut: false,
         points: p.points,
       })),
       currentUserRegistered,
