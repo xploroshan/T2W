@@ -127,7 +127,7 @@ async function syncUserStats(riderProfileId: string) {
   if (linkedUsers.length === 0) return;
 
   const participations = await prisma.rideParticipation.findMany({
-    where: { riderProfileId },
+    where: { riderProfileId, droppedOut: false },
     include: { ride: { select: { distanceKm: true } } },
   });
 

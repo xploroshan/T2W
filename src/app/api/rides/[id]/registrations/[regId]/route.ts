@@ -42,6 +42,32 @@ export async function PATCH(
       data: { approvalStatus },
     });
 
+    // When confirmed, auto-create a RideParticipation with 5 points (if not already present)
+    if (approvalStatus === "confirmed") {
+      // Find the rider's linked RiderProfile
+      const regUser = await prisma.user.findUnique({
+        where: { id: registration.userId },
+        select: { linkedRiderId: true },
+      });
+
+      if (regUser?.linkedRiderId) {
+        await prisma.rideParticipation.upsert({
+          where: {
+            riderProfileId_rideId: {
+              riderProfileId: regUser.linkedRiderId,
+              rideId,
+            },
+          },
+          update: {}, // Don't overwrite if already exists (admin may have set custom points)
+          create: {
+            riderProfileId: regUser.linkedRiderId,
+            rideId,
+            points: 5,
+          },
+        });
+      }
+    }
+
     return NextResponse.json({
       registration: {
         id: updated.id,

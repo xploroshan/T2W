@@ -79,8 +79,10 @@ export async function GET(req: NextRequest) {
 
     const riders = profiles.map((p: typeof profiles[number]) => {
       const stats = computeRideRoleStats(p.name, allRides);
-      // All participations are active (dropouts cleared)
-      const activeParticipations = p.participations;
+      // Exclude dropped-out riders from active stats
+      const activeParticipations = p.participations.filter(
+        (pp: typeof p.participations[number]) => !pp.droppedOut
+      );
       return {
       id: p.id,
       name: p.name,
@@ -98,17 +100,17 @@ export async function GET(req: NextRequest) {
       ridesCompleted: activeParticipations.length,
       totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
       totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
-      ridesParticipated: p.participations.map((pp: typeof p.participations[number]) => ({
+      ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({
         rideId: pp.ride.id,
         rideNumber: pp.ride.rideNumber,
         rideTitle: pp.ride.title,
         rideDate: pp.ride.startDate.toISOString(),
         distanceKm: pp.ride.distanceKm,
         points: pp.points,
-        droppedOut: false,
+        droppedOut: pp.droppedOut,
       })),
       participationMap: Object.fromEntries(
-        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
+        activeParticipations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
       ),
     };
     });
