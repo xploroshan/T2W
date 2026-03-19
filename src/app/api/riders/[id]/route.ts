@@ -86,6 +86,11 @@ export async function GET(
     });
     const stats = computeRideRoleStats(profile.name, allRides);
 
+    // Exclude dropped-out rides from active stats
+    const activeParticipations = profile.participations.filter(
+      (p: typeof profile.participations[number]) => !p.droppedOut
+    );
+
     const rider = {
       id: profile.id,
       name: profile.name,
@@ -99,16 +104,17 @@ export async function GET(
       avatarUrl: profile.avatarUrl,
       ...stats,
       userRole: profile.role !== "rider" ? profile.role : (profile.linkedUsers[0]?.role || null),
-      ridesCompleted: profile.participations.length,
-      totalKm: profile.participations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.ride.distanceKm, 0),
-      totalPoints: profile.participations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.points, 0),
-      ridesParticipated: profile.participations.map((p: typeof profile.participations[number]) => ({
+      ridesCompleted: activeParticipations.length,
+      totalKm: activeParticipations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.ride.distanceKm, 0),
+      totalPoints: activeParticipations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.points, 0),
+      ridesParticipated: activeParticipations.map((p: typeof profile.participations[number]) => ({
         rideId: p.ride.id,
         rideNumber: p.ride.rideNumber,
         rideTitle: p.ride.title,
         rideDate: p.ride.startDate.toISOString(),
         distanceKm: p.ride.distanceKm,
         points: p.points,
+        droppedOut: p.droppedOut,
       })),
     };
 
