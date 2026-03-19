@@ -885,6 +885,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   {ride.confirmedRiderNames.map((name, index) => {
                     const riderId = getRiderId(name, riderNameToId);
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
+                    const link = riderId ? `/rider/${riderId}` : null;
                     const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
                     const thumbEl = avatar ? (
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-green-400/10">
@@ -895,10 +896,23 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {initials}
                       </div>
                     );
-                    return (
-                      <div key={index} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5">
+                    return link ? (
+                      <div key={`${name}-${index}`} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5 hover:bg-green-400/10 hover:ring-1 hover:ring-green-400/30 transition-all">
+                        <Link href={link} className="flex items-center gap-3 flex-1 min-w-0">
+                          {thumbEl}
+                          <span className="text-sm truncate flex items-center gap-1.5 text-green-400 hover:underline">
+                            {name}
+                            <RoleTag role={getRoleByNameOrId(name, riderId, riderIdToRole, riderNameToRole)} />
+                          </span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div key={`${name}-${index}`} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5">
                         {thumbEl}
-                        <span className="text-sm text-white truncate">{name}</span>
+                        <span className="text-sm truncate flex items-center gap-1.5 text-white">
+                          {name}
+                          <RoleTag role={getRoleByNameOrId(name, riderId, riderIdToRole, riderNameToRole)} />
+                        </span>
                       </div>
                     );
                   })}
