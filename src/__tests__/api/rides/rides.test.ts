@@ -76,6 +76,58 @@ describe('GET /api/rides', () => {
     expect(data.rides[0].title).toBe('Weekend Ride');
   });
 
+  it('returns activeRegistrations counting only pending + confirmed', async () => {
+    const rides = [
+      {
+        id: 'ride-1',
+        title: 'Test Ride',
+        rideNumber: '#001',
+        type: 'day',
+        status: 'upcoming',
+        startDate: new Date('2025-04-01'),
+        endDate: new Date('2025-04-01'),
+        startLocation: 'A',
+        startLocationUrl: null,
+        endLocation: 'B',
+        endLocationUrl: null,
+        route: '[]',
+        distanceKm: 100,
+        maxRiders: 10,
+        difficulty: 'easy',
+        description: 'Test',
+        highlights: '[]',
+        posterUrl: null,
+        fee: 0,
+        leadRider: 'Lead',
+        sweepRider: 'Sweep',
+        organisedBy: null,
+        accountsBy: null,
+        meetupTime: null,
+        rideStartTime: null,
+        startingPoint: null,
+        riders: null,
+        regOpenCore: null,
+        regOpenT2w: null,
+        regOpenRider: null,
+        participations: [],
+        registrations: [
+          { id: 'r1', approvalStatus: 'confirmed' },
+          { id: 'r2', approvalStatus: 'confirmed' },
+          { id: 'r3', approvalStatus: 'pending' },
+          { id: 'r4', approvalStatus: 'dropout' },
+          { id: 'r5', approvalStatus: 'rejected' },
+        ],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.rides[0].registeredRiders).toBe(2);       // only confirmed
+    expect(data.rides[0].activeRegistrations).toBe(3);     // pending + confirmed
+  });
+
   it('filters by ?status=upcoming', async () => {
     mockFindMany.mockResolvedValue([]);
 
