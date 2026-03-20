@@ -15,7 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/rides", label: "T2W Tales" },
+  { href: "/rides", label: "Rides" },
   { href: "/guidelines", label: "Guidelines" },
   { href: "/blogs", label: "Blogs & Vlogs" },
 ];
@@ -78,19 +78,6 @@ export function Navbar() {
                 )}
               </Link>
             ))}
-            {user && (
-              <Link
-                href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
-                className="relative rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
-                onMouseEnter={() => setActiveDropdown("My Space")}
-                onMouseLeave={() => setActiveDropdown(null)}
-              >
-                My Space
-                {activeDropdown === "My Space" && (
-                  <span className="absolute bottom-0 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-t2w-accent" />
-                )}
-              </Link>
-            )}
             {user && (user.role === "superadmin" || user.role === "core_member") && (
               <Link
                 href="/admin"
@@ -172,15 +159,6 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
-              {user && (
-                <Link
-                  href={user.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides"}
-                  onClick={() => setIsOpen(false)}
-                  className="rounded-xl px-4 py-3 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-                >
-                  My Space
-                </Link>
-              )}
               {user && (user.role === "superadmin" || user.role === "core_member") && (
                 <Link
                   href="/admin"

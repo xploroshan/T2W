@@ -670,7 +670,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           className="mb-8 inline-flex items-center gap-2 text-sm text-t2w-muted transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to T2W Tales
+          Back to Rides
         </Link>
 
         {/* Header */}

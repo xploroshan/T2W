@@ -49,7 +49,7 @@ describe('Navbar', () => {
   it('renders navigation links', () => {
     render(<Navbar />);
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.getByText('T2W Tales')).toBeInTheDocument();
+    expect(screen.getByText('Rides')).toBeInTheDocument();
     expect(screen.getByText('Guidelines')).toBeInTheDocument();
     expect(screen.getByText('Blogs & Vlogs')).toBeInTheDocument();
   });
