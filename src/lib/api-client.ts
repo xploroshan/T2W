@@ -307,9 +307,10 @@ export const api = {
   },
 
   riders: {
-    list: async (search?: string) => {
+    list: async (search?: string, period?: string) => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
+      if (period && period !== "all") params.set("period", period);
       const res = await fetch(`/api/riders?${params}`);
       if (!res.ok) throw new Error("Failed to load riders");
       return res.json();

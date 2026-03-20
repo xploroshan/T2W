@@ -1,14 +1,23 @@
 "use client";
 
-import { Trophy, Route, Users, Bike } from "lucide-react";
+import { Trophy, Route, Users, Bike, Calendar } from "lucide-react";
+import type { ArenaPeriod } from "./RiderArenaPage";
+
+const periodOptions: { value: ArenaPeriod; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "1y", label: "Last 1 Year" },
+  { value: "6m", label: "Last 6 Months" },
+];
 
 interface ArenaHeroProps {
   totalRiders: number;
   totalKm: number;
   totalRides: number;
+  period: ArenaPeriod;
+  onPeriodChange: (period: ArenaPeriod) => void;
 }
 
-export function ArenaHero({ totalRiders, totalKm, totalRides }: ArenaHeroProps) {
+export function ArenaHero({ totalRiders, totalKm, totalRides, period, onPeriodChange }: ArenaHeroProps) {
   return (
     <section className="relative overflow-hidden border-b border-t2w-border bg-gradient-to-br from-t2w-dark via-t2w-secondary to-t2w-dark pt-28 pb-12 sm:pt-32 sm:pb-16">
       {/* Background glow effects */}
@@ -34,6 +43,24 @@ export function ArenaHero({ totalRiders, totalKm, totalRides }: ArenaHeroProps) 
           <p className="mx-auto mt-3 max-w-xl text-base text-t2w-muted sm:text-lg">
             Where legends are forged on the open road
           </p>
+
+          {/* Time period selector */}
+          <div className="mt-5 flex items-center justify-center gap-1.5">
+            <Calendar className="mr-1 h-3.5 w-3.5 text-t2w-muted" />
+            {periodOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => onPeriodChange(opt.value)}
+                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                  period === opt.value
+                    ? "bg-t2w-accent text-white shadow-lg shadow-t2w-accent/25"
+                    : "border border-t2w-border bg-t2w-surface/50 text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Summary stats */}

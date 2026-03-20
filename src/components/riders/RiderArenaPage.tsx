@@ -20,14 +20,18 @@ function assignBadgeTier(totalKm: number) {
   return badge;
 }
 
+export type ArenaPeriod = "all" | "1y" | "6m";
+
 export function RiderArenaPage() {
   const { user } = useAuth();
   const [riders, setRiders] = useState<ArenaRider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<ArenaPeriod>("all");
 
   useEffect(() => {
+    setLoading(true);
     api.riders
-      .list()
+      .list(undefined, period)
       .then((data: { riders: Array<Record<string, unknown>> }) => {
         const mapped: ArenaRider[] = data.riders
           .filter((r: Record<string, unknown>) => (r.ridesCompleted as number) > 0 || (r.totalKm as number) > 0)
@@ -66,7 +70,7 @@ export function RiderArenaPage() {
         console.error("Failed to load riders:", err);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [period]);
 
   if (loading) {
     return (
@@ -85,6 +89,8 @@ export function RiderArenaPage() {
         totalRiders={riders.length}
         totalKm={totalKm}
         totalRides={totalRides}
+        period={period}
+        onPeriodChange={setPeriod}
       />
       <ArenaPodium riders={riders} />
       <ArenaLeaderboard
