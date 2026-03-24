@@ -457,7 +457,16 @@ export function AdminPage() {
         accountsBy: String(r.accountsBy || ""),
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
-      setEditRideRiders(Array.isArray(r.riders) ? (r.riders as string[]) : []);
+      // Use confirmed registration names as the source of truth for riders list,
+      // falling back to the manual riders JSON only if no registrations exist
+      const confirmedNames = Array.isArray(r.confirmedRiderNames) ? (r.confirmedRiderNames as string[]) : [];
+      const manualRiders = Array.isArray(r.riders) ? (r.riders as string[]) : [];
+      // Merge: confirmed registrations + any manually-added riders not in registrations
+      const mergedRiders = [...confirmedNames];
+      for (const name of manualRiders) {
+        if (!mergedRiders.includes(name)) mergedRiders.push(name);
+      }
+      setEditRideRiders(mergedRiders);
       // Load per-ride form settings
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
@@ -622,6 +631,15 @@ export function AdminPage() {
       });
       if (!res.ok) throw new Error("Failed to update");
       setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
+      // Sync riders list: add on confirm, remove on reject/dropout
+      const reg = rideRegistrations.find((r) => r.id === regId);
+      if (reg?.riderName) {
+        if (status === "confirmed") {
+          await api.rides.addRider(rideId, reg.riderName).catch(() => {});
+        } else if (status === "rejected" || status === "dropout") {
+          await api.rides.removeRider(rideId, reg.riderName).catch(() => {});
+        }
+      }
       // Refresh ride list to update count
       const ridesData = await api.rides.list();
       setRides((ridesData as { rides: AdminRide[] }).rides);
