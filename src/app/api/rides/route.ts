@@ -37,8 +37,12 @@ export async function GET(req: NextRequest) {
       route: safeJsonParse(r.route, []),
       distanceKm: r.distanceKm,
       maxRiders: r.maxRiders,
-      registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length,
-      activeRegistrations: r.registrations.filter((reg) => reg.approvalStatus === "pending" || reg.approvalStatus === "confirmed").length,
+      registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length
+        || r.participations.length
+        || safeJsonParse(r.riders, []).length,
+      activeRegistrations: r.registrations.filter((reg) => reg.approvalStatus === "pending" || reg.approvalStatus === "confirmed").length
+        || r.participations.length
+        || safeJsonParse(r.riders, []).length,
       difficulty: r.difficulty,
       description: r.description,
       highlights: safeJsonParse(r.highlights, []),

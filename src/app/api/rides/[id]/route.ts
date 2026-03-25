@@ -73,8 +73,12 @@ export async function GET(
       route: safeJsonParse(ride.route, []),
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
-      registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length,
-      activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length,
+      registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length
+        || ride.participations.length
+        || safeJsonParse(ride.riders, []).length,
+      activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length
+        || ride.participations.length
+        || safeJsonParse(ride.riders, []).length,
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")
         .map((r) => r.riderName),
