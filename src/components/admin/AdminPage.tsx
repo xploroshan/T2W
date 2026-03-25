@@ -624,13 +624,14 @@ export function AdminPage() {
       });
       if (!res.ok) throw new Error("Failed to update");
       setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
-      // Sync riders list: add on confirm, remove on reject/dropout
+      // The PATCH endpoint handles all sync (participation + Ride.riders cache).
+      // Update local edit riders list to stay in sync with confirmed registrations.
       const reg = rideRegistrations.find((r) => r.id === regId);
       if (reg?.riderName) {
         if (status === "confirmed") {
-          await api.rides.addRider(rideId, reg.riderName).catch(() => {});
-        } else if (status === "rejected" || status === "dropout") {
-          await api.rides.removeRider(rideId, reg.riderName).catch(() => {});
+          setEditRideRiders((prev) => prev.includes(reg.riderName) ? prev : [...prev, reg.riderName]);
+        } else {
+          setEditRideRiders((prev) => prev.filter((r) => r !== reg.riderName));
         }
       }
       // Refresh ride list to update count
@@ -1521,26 +1522,28 @@ export function AdminPage() {
                                 </p>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                {reg.approvalStatus !== "confirmed" && reg.approvalStatus !== "dropout" && (
-                                  <button
-                                    onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
-                                    disabled={updatingRegId === reg.id}
-                                    className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
-                                  >
-                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-                                    Confirm
-                                  </button>
-                                )}
+                                {/* pending → Confirm / Reject */}
                                 {reg.approvalStatus === "pending" && (
-                                  <button
-                                    onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
-                                    disabled={updatingRegId === reg.id}
-                                    className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
-                                  >
-                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                                    Reject
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                                      Confirm
+                                    </button>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                                      Reject
+                                    </button>
+                                  </>
                                 )}
+                                {/* confirmed → Drop-Out */}
                                 {reg.approvalStatus === "confirmed" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "dropout")}
@@ -1551,14 +1554,36 @@ export function AdminPage() {
                                     Drop-Out
                                   </button>
                                 )}
+                                {/* dropout → Re-Confirm / Reject */}
                                 {reg.approvalStatus === "dropout" && (
+                                  <>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                      Re-Confirm
+                                    </button>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                {/* rejected → Re-Confirm */}
+                                {reg.approvalStatus === "rejected" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
                                     disabled={updatingRegId === reg.id}
                                     className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
                                   >
                                     {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                                    Restore
+                                    Re-Confirm
                                   </button>
                                 )}
                               </div>

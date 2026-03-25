@@ -288,4 +288,128 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
     // But Ride.riders cache still synced
     expect(mockRideUpdate).toHaveBeenCalled();
   });
+
+  // ── Dropout → Re-Confirm flow ──
+
+  it('re-confirms a dropout rider and restores participation', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1', approvalStatus: 'dropout' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['Alice', 'RestoredRider']);
+
+    const { status, data } = await parseResponse(
+      await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' })
+    );
+
+    expect(status).toBe(200);
+    expect(data.registration.approvalStatus).toBe('confirmed');
+    // Participation should be upserted with droppedOut: false (restoring the rider)
+    expect(mockParticipationUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { droppedOut: false },
+        create: expect.objectContaining({ riderProfileId: 'rider-10', rideId: 'ride-1', points: 5 }),
+      })
+    );
+    // Ride.riders cache updated to include restored rider
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['Alice', 'RestoredRider']) },
+    });
+  });
+
+  it('re-confirms a rejected rider and creates participation', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1', approvalStatus: 'rejected' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['RestoredRider']);
+
+    const { status, data } = await parseResponse(
+      await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' })
+    );
+
+    expect(status).toBe(200);
+    expect(data.registration.approvalStatus).toBe('confirmed');
+    expect(mockParticipationUpsert).toHaveBeenCalled();
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['RestoredRider']) },
+    });
+  });
+
+  it('allows dropout → rejected transition', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1', approvalStatus: 'dropout' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'rejected' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockSyncReturningNames([]);
+
+    const { status, data } = await parseResponse(
+      await callPATCH('ride-1', 'reg-1', { approvalStatus: 'rejected' })
+    );
+
+    expect(status).toBe(200);
+    expect(data.registration.approvalStatus).toBe('rejected');
+    // Rejected doesn't touch participation
+    expect(mockParticipationUpsert).not.toHaveBeenCalled();
+    expect(mockParticipationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('full lifecycle: pending → confirmed → dropout → re-confirmed', async () => {
+    // Step 1: Confirm
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['TestRider']);
+
+    let result = await parseResponse(await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' }));
+    expect(result.status).toBe(200);
+    expect(result.data.registration.approvalStatus).toBe('confirmed');
+
+    // Step 2: Dropout
+    vi.clearAllMocks();
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'dropout' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpdateMany.mockResolvedValue({ count: 1 });
+    mockSyncReturningNames([]); // Rider dropped out, no confirmed riders
+
+    result = await parseResponse(await callPATCH('ride-1', 'reg-1', { approvalStatus: 'dropout' }));
+    expect(result.status).toBe(200);
+    expect(result.data.registration.approvalStatus).toBe('dropout');
+    expect(mockParticipationUpdateMany).toHaveBeenCalledWith({
+      where: { riderProfileId: 'rider-10', rideId: 'ride-1' },
+      data: { droppedOut: true },
+    });
+
+    // Step 3: Re-Confirm (rider decides to come back)
+    vi.clearAllMocks();
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['TestRider']); // Rider is back
+
+    result = await parseResponse(await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' }));
+    expect(result.status).toBe(200);
+    expect(result.data.registration.approvalStatus).toBe('confirmed');
+    // Participation restored with droppedOut: false
+    expect(mockParticipationUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { droppedOut: false },
+      })
+    );
+    // Ride.riders cache updated with rider back in
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['TestRider']) },
+    });
+  });
 });
