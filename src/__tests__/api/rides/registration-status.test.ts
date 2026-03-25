@@ -5,11 +5,15 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     rideRegistration: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     rideParticipation: {
       upsert: vi.fn(),
       updateMany: vi.fn(),
+    },
+    ride: {
+      update: vi.fn(),
     },
     user: {
       findUnique: vi.fn(),
@@ -27,10 +31,12 @@ import { getCurrentUser } from '@/lib/auth';
 
 const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockFindFirst = prisma.rideRegistration.findFirst as ReturnType<typeof vi.fn>;
+const mockFindMany = prisma.rideRegistration.findMany as ReturnType<typeof vi.fn>;
 const mockUpdate = prisma.rideRegistration.update as ReturnType<typeof vi.fn>;
 const mockUserFindUnique = prisma.user.findUnique as ReturnType<typeof vi.fn>;
 const mockParticipationUpsert = prisma.rideParticipation.upsert as ReturnType<typeof vi.fn>;
 const mockParticipationUpdateMany = prisma.rideParticipation.updateMany as ReturnType<typeof vi.fn>;
+const mockRideUpdate = prisma.ride.update as ReturnType<typeof vi.fn>;
 
 function callPATCH(rideId: string, regId: string, body: Record<string, unknown>) {
   const req = createNextRequest(`http://localhost:3000/api/rides/${rideId}/registrations/${regId}`, {
@@ -40,9 +46,17 @@ function callPATCH(rideId: string, regId: string, body: Record<string, unknown>)
   return PATCH(req, { params: Promise.resolve({ id: rideId, regId }) });
 }
 
+/** Helper: set up mocks so syncRideRidersFromRegistrations works correctly */
+function mockSyncReturningNames(names: string[]) {
+  mockFindMany.mockResolvedValue(names.map((n) => ({ riderName: n })));
+  mockRideUpdate.mockResolvedValue({});
+}
+
 describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: sync returns empty (override per test as needed)
+    mockSyncReturningNames([]);
   });
 
   it('returns 403 for non-admin user', async () => {
@@ -95,6 +109,7 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
     mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
     mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
     mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['Alice', 'Bob']);
 
     const { status, data } = await parseResponse(
       await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' })
@@ -121,6 +136,7 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
     mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'dropout' });
     mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
     mockParticipationUpdateMany.mockResolvedValue({ count: 1 });
+    mockSyncReturningNames(['Alice']); // Bob dropped out
 
     const { status, data } = await parseResponse(
       await callPATCH('ride-1', 'reg-1', { approvalStatus: 'dropout' })
@@ -139,6 +155,7 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
     mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
     mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'rejected' });
     mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockSyncReturningNames([]);
 
     const { status, data } = await parseResponse(
       await callPATCH('ride-1', 'reg-1', { approvalStatus: 'rejected' })
@@ -156,6 +173,7 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
     mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
     mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
     mockUserFindUnique.mockResolvedValue({ linkedRiderId: null });
+    mockSyncReturningNames(['Alice']);
 
     const { status } = await parseResponse(
       await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' })
@@ -171,6 +189,7 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
       mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
       mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus });
       mockUserFindUnique.mockResolvedValue({ linkedRiderId: null });
+      mockSyncReturningNames([]);
 
       const { status } = await parseResponse(
         await callPATCH('ride-1', 'reg-1', { approvalStatus })
@@ -178,5 +197,95 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
 
       expect(status).toBe(200);
     }
+  });
+
+  // ── Ride.riders cache sync (single source of truth) ──
+
+  it('syncs Ride.riders cache from confirmed registrations on confirm', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['Alice', 'Bob', 'Charlie']);
+
+    await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' });
+
+    // Verify syncRideRidersFromRegistrations was called
+    expect(mockFindMany).toHaveBeenCalledWith({
+      where: { rideId: 'ride-1', approvalStatus: 'confirmed' },
+      select: { riderName: true },
+      orderBy: { registeredAt: 'asc' },
+    });
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['Alice', 'Bob', 'Charlie']) },
+    });
+  });
+
+  it('syncs Ride.riders cache on rejection (removes rejected rider from cache)', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'rejected' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: null });
+    // After rejection, only confirmed riders remain
+    mockSyncReturningNames(['Alice', 'Bob']);
+
+    await callPATCH('ride-1', 'reg-1', { approvalStatus: 'rejected' });
+
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['Alice', 'Bob']) },
+    });
+  });
+
+  it('syncs Ride.riders cache on dropout (dropout rider excluded from cache)', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'dropout' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: 'rider-10' });
+    mockParticipationUpdateMany.mockResolvedValue({ count: 1 });
+    // After dropout, only remaining confirmed riders are in cache
+    mockSyncReturningNames(['Alice']);
+
+    await callPATCH('ride-1', 'reg-1', { approvalStatus: 'dropout' });
+
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify(['Alice']) },
+    });
+  });
+
+  it('Ride.riders cache becomes empty when all riders are rejected/dropout', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'rejected' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: null });
+    mockSyncReturningNames([]); // No confirmed riders left
+
+    await callPATCH('ride-1', 'reg-1', { approvalStatus: 'rejected' });
+
+    expect(mockRideUpdate).toHaveBeenCalledWith({
+      where: { id: 'ride-1' },
+      data: { riders: JSON.stringify([]) },
+    });
+  });
+
+  it('does not skip participation when user has no linkedRiderId', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindFirst.mockResolvedValue({ id: 'reg-1', userId: 'user-10', rideId: 'ride-1' });
+    mockUpdate.mockResolvedValue({ id: 'reg-1', approvalStatus: 'confirmed' });
+    mockUserFindUnique.mockResolvedValue({ linkedRiderId: null });
+    mockSyncReturningNames(['TestRider']);
+
+    const { status } = await parseResponse(
+      await callPATCH('ride-1', 'reg-1', { approvalStatus: 'confirmed' })
+    );
+
+    expect(status).toBe(200);
+    // No participation created since no linkedRiderId
+    expect(mockParticipationUpsert).not.toHaveBeenCalled();
+    // But Ride.riders cache still synced
+    expect(mockRideUpdate).toHaveBeenCalled();
   });
 });
