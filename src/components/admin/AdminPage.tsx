@@ -457,14 +457,9 @@ export function AdminPage() {
         accountsBy: String(r.accountsBy || ""),
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
-      // Merge confirmed registrations + manually-added riders for all statuses.
+      // Single source of truth: only use confirmed registrations for the rider list.
       const confirmedNames = Array.isArray(r.confirmedRiderNames) ? (r.confirmedRiderNames as string[]) : [];
-      const manualRiders = Array.isArray(r.riders) ? (r.riders as string[]) : [];
-      const mergedRiders = [...confirmedNames];
-      for (const name of manualRiders) {
-        if (!mergedRiders.includes(name)) mergedRiders.push(name);
-      }
-      setEditRideRiders(mergedRiders);
+      setEditRideRiders(confirmedNames);
       // Load per-ride form settings
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);

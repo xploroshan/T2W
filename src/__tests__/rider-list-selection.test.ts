@@ -2,25 +2,20 @@ import { describe, it, expect } from 'vitest';
 
 /**
  * Tests for the rider list selection logic used in:
- * - AdminPage.tsx startEditRide() — choosing which riders to show in Manage Riders
+ * - AdminPage.tsx startEditRide() — single source of truth: only confirmed registrations
  * - RideDetailPage.tsx — choosing which riders to display for completed rides
+ *
+ * KEY DESIGN PRINCIPLE: RideRegistration (confirmed) is the SINGLE SOURCE OF TRUTH
+ * for rider counts. The Ride.riders JSON field is a sync cache, NOT an independent source.
+ * The admin edit form no longer merges confirmed + manual riders.
  */
 
 // Mirrors the logic in AdminPage.tsx startEditRide()
+// Single source of truth: always use confirmed registrations only
 function selectEditRideRiders(
-  status: string,
-  confirmedRiderNames: string[],
-  manualRiders: string[]
+  confirmedRiderNames: string[]
 ): string[] {
-  if (status === 'completed' && confirmedRiderNames.length > 0) {
-    return confirmedRiderNames;
-  }
-  // Merge: confirmed registrations + any manually-added riders not in registrations
-  const mergedRiders = [...confirmedRiderNames];
-  for (const name of manualRiders) {
-    if (!mergedRiders.includes(name)) mergedRiders.push(name);
-  }
-  return mergedRiders;
+  return [...confirmedRiderNames];
 }
 
 // Mirrors the logic in RideDetailPage.tsx for completed rides
@@ -31,40 +26,32 @@ function selectDisplayRiders(
   return confirmedRiderNames.length > 0 ? confirmedRiderNames : staticRiders;
 }
 
-describe('Admin Edit — Manage Riders selection (startEditRide)', () => {
+describe('Admin Edit — Manage Riders selection (single source of truth)', () => {
   const confirmed = ['Alice', 'Bob', 'Charlie'];
-  const manual = ['Alice', 'Bob', 'Dave', 'Eve']; // Dave & Eve are manual-only
 
-  it('completed ride with confirmed riders → only confirmed riders', () => {
-    const result = selectEditRideRiders('completed', confirmed, manual);
+  it('uses only confirmed registrations regardless of ride status', () => {
+    const result = selectEditRideRiders(confirmed);
     expect(result).toEqual(['Alice', 'Bob', 'Charlie']);
+  });
+
+  it('does NOT include manually-added riders from Ride.riders field', () => {
+    // Even if Ride.riders has extra names, the edit form only shows confirmed registrations
+    const result = selectEditRideRiders(confirmed);
     expect(result).not.toContain('Dave');
     expect(result).not.toContain('Eve');
+    expect(result).toHaveLength(3);
   });
 
-  it('completed ride with no confirmed riders → falls back to manual riders', () => {
-    const result = selectEditRideRiders('completed', [], manual);
-    expect(result).toEqual(manual);
-  });
-
-  it('upcoming ride → merges confirmed + unique manual riders', () => {
-    const result = selectEditRideRiders('upcoming', confirmed, manual);
-    expect(result).toEqual(['Alice', 'Bob', 'Charlie', 'Dave', 'Eve']);
-  });
-
-  it('upcoming ride with no confirmed riders → returns manual riders', () => {
-    const result = selectEditRideRiders('upcoming', [], manual);
-    expect(result).toEqual(manual);
-  });
-
-  it('upcoming ride with no manual riders → returns confirmed riders', () => {
-    const result = selectEditRideRiders('upcoming', confirmed, []);
-    expect(result).toEqual(confirmed);
-  });
-
-  it('both empty → returns empty', () => {
-    const result = selectEditRideRiders('completed', [], []);
+  it('returns empty when no confirmed registrations exist', () => {
+    const result = selectEditRideRiders([]);
     expect(result).toEqual([]);
+  });
+
+  it('count matches what is shown on ride cards and detail pages', () => {
+    // This is the core invariant: edit form count === public count
+    const editCount = selectEditRideRiders(confirmed).length;
+    const publicCount = confirmed.length; // same source: confirmedRiderNames
+    expect(editCount).toBe(publicCount);
   });
 });
 
