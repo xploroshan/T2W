@@ -26,6 +26,7 @@ type AchievementRider = {
   organizePts: number;
   sweepPts: number;
   totalPts: number;
+  percentageAchieved: number;
   highlighted: boolean;
 };
 
@@ -39,6 +40,7 @@ type AchievementData = {
   thresholdPercent: number;
   totalRidesInPeriod: number;
   maxPossible: number;
+  thresholdBase: number;
   threshold: number;
   rides: Array<{ id: string; rideNumber: string; title: string; startDate: string }>;
   riders: AchievementRider[];
@@ -107,7 +109,7 @@ export function ArenaAchievements() {
           {formatPeriodDate(data.periodStart)} &ndash; {formatPeriodDate(data.periodEnd)}
         </h2>
         <p className="mt-2 text-sm text-t2w-muted">
-          Riders meeting {data.thresholdPercent}% of {data.thresholdBase ?? 60} base points (12 rides × {data.pointsPerParticipation} pts) are highlighted
+          {data.totalRidesInPeriod} rides × {data.pointsPerParticipation} pts = {data.thresholdBase} total points. Riders achieving ≥ {data.thresholdPercent}% ({data.threshold} pts) are highlighted
         </p>
       </div>
 
@@ -243,11 +245,9 @@ export function ArenaAchievements() {
                   </span>
                 </td>
                 <td className="px-3 py-3 text-center">
-                  {rider.highlighted ? (
-                    <CheckCircle className="mx-auto h-5 w-5 text-green-400" />
-                  ) : (
-                    <span className="text-xs text-t2w-muted">-</span>
-                  )}
+                  <span className={`text-sm font-semibold ${rider.highlighted ? "text-green-400" : "text-t2w-muted"}`}>
+                    {rider.percentageAchieved}%
+                  </span>
                 </td>
               </tr>
             ))}

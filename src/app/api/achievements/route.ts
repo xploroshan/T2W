@@ -79,9 +79,8 @@ export async function GET() {
     const totalRidesInPeriod = ridesInPeriod.length;
     const maxPossiblePerRide = settings.pointsPerParticipation + settings.pointsPerOrganize + settings.pointsPerSweep;
     const maxPossible = totalRidesInPeriod * maxPossiblePerRide;
-    // Threshold is based on expected 12 rides/year × participation points only
-    const expectedRidesPerYear = 12;
-    const thresholdBase = expectedRidesPerYear * settings.pointsPerParticipation;
+    // Threshold is based on actual total rides in period × participation points
+    const thresholdBase = totalRidesInPeriod * settings.pointsPerParticipation;
     const threshold = Math.round(thresholdBase * (settings.thresholdPercent / 100));
 
     // Get all rider profiles with participations in the period
@@ -131,7 +130,8 @@ export async function GET() {
         const organizePts = ridesOrganizedInPeriod * settings.pointsPerOrganize;
         const sweepPts = sweepsDoneInPeriod * settings.pointsPerSweep;
         const totalPts = participationPts + organizePts + sweepPts;
-        const highlighted = totalPts >= threshold;
+        const percentageAchieved = thresholdBase > 0 ? Math.round((totalPts / thresholdBase) * 100) : 0;
+        const highlighted = percentageAchieved >= settings.thresholdPercent;
 
         return {
           id: p.id,
@@ -145,6 +145,7 @@ export async function GET() {
           organizePts,
           sweepPts,
           totalPts,
+          percentageAchieved,
           highlighted,
         };
       })
