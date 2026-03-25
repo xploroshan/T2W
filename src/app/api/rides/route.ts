@@ -39,10 +39,10 @@ export async function GET(req: NextRequest) {
       maxRiders: r.maxRiders,
       registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length
         || r.participations.length
-        || safeJsonParse(r.riders, []).length,
+        || (safeJsonParse(r.riders, []) as string[]).length,
       activeRegistrations: r.registrations.filter((reg) => reg.approvalStatus === "pending" || reg.approvalStatus === "confirmed").length
         || r.participations.length
-        || safeJsonParse(r.riders, []).length,
+        || (safeJsonParse(r.riders, []) as string[]).length,
       difficulty: r.difficulty,
       description: r.description,
       highlights: safeJsonParse(r.highlights, []),

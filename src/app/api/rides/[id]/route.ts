@@ -75,10 +75,10 @@ export async function GET(
       maxRiders: ride.maxRiders,
       registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length
         || ride.participations.length
-        || safeJsonParse(ride.riders, []).length,
+        || (safeJsonParse(ride.riders, []) as string[]).length,
       activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length
         || ride.participations.length
-        || safeJsonParse(ride.riders, []).length,
+        || (safeJsonParse(ride.riders, []) as string[]).length,
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")
         .map((r) => r.riderName),
