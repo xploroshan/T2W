@@ -207,48 +207,32 @@ export const api = {
       return { success: true, id };
     },
     addRider: async (rideId: string, riderName: string) => {
-      // Get current ride, add rider, update via API
-      const rideRes = await fetch(`/api/rides/${rideId}`);
-      if (!rideRes.ok) throw new Error("Ride not found");
-      const { ride } = await rideRes.json();
-      const riders: string[] = ride.riders || [];
-      if (!riders.includes(riderName)) riders.push(riderName);
-      await fetch(`/api/rides/${rideId}`, {
-        method: "PUT",
+      // Single source of truth: create a confirmed RideRegistration via admin endpoint.
+      // This also syncs RideParticipation and Ride.riders cache automatically.
+      const res = await fetch(`/api/rides/${rideId}/registrations/admin-manage`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ riders }),
+        body: JSON.stringify({ riderName }),
       });
-      // Also create a RideParticipation record so leaderboard stays in sync
-      try {
-        const { rider } = await api.riders.getByName(riderName);
-        if (rider) {
-          await api.participation.toggle(rider.id, rideId, true);
-        }
-      } catch {
-        // Best-effort: participation sync is non-blocking
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to add rider");
       }
-      return { success: true, riders };
+      return res.json();
     },
     removeRider: async (rideId: string, riderName: string) => {
-      const rideRes = await fetch(`/api/rides/${rideId}`);
-      if (!rideRes.ok) throw new Error("Ride not found");
-      const { ride } = await rideRes.json();
-      const riders: string[] = (ride.riders || []).filter((r: string) => r !== riderName);
-      await fetch(`/api/rides/${rideId}`, {
-        method: "PUT",
+      // Single source of truth: delete the RideRegistration via admin endpoint.
+      // This also removes RideParticipation and updates Ride.riders cache.
+      const res = await fetch(`/api/rides/${rideId}/registrations/admin-manage`, {
+        method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ riders }),
+        body: JSON.stringify({ riderName }),
       });
-      // Also remove the RideParticipation record so leaderboard stays in sync
-      try {
-        const { rider } = await api.riders.getByName(riderName);
-        if (rider) {
-          await api.participation.toggle(rider.id, rideId, false);
-        }
-      } catch {
-        // Best-effort: participation sync is non-blocking
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to remove rider");
       }
-      return { success: true, riders };
+      return res.json();
     },
   },
 

@@ -131,15 +131,28 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// Sync the ride's riders JSON field from active RideParticipation records
+// Sync the ride's riders JSON field from confirmed RideRegistration records (single source of truth).
+// Falls back to active RideParticipation records only if no confirmed registrations exist (legacy rides).
 async function syncRideRidersList(rideId: string) {
   try {
-    const activeParticipations = await prisma.rideParticipation.findMany({
-      where: { rideId, droppedOut: false },
-      include: { riderProfile: { select: { name: true } } },
+    const confirmedRegistrations = await prisma.rideRegistration.findMany({
+      where: { rideId, approvalStatus: "confirmed" },
+      select: { riderName: true },
+      orderBy: { registeredAt: "asc" },
     });
 
-    const riderNames = activeParticipations.map((p) => p.riderProfile.name);
+    let riderNames: string[];
+
+    if (confirmedRegistrations.length > 0) {
+      riderNames = confirmedRegistrations.map((r) => r.riderName);
+    } else {
+      // Fallback for legacy rides without registrations
+      const activeParticipations = await prisma.rideParticipation.findMany({
+        where: { rideId, droppedOut: false },
+        include: { riderProfile: { select: { name: true } } },
+      });
+      riderNames = activeParticipations.map((p) => p.riderProfile.name);
+    }
 
     await prisma.ride.update({
       where: { id: rideId },
