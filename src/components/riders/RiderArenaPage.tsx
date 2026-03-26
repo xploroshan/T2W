@@ -52,7 +52,10 @@ export function RiderArenaPage() {
           .map((r: Record<string, unknown>) => {
             const badge = assignBadgeTier(r.totalKm as number, tiers);
             const score = computeArenaScore({
-              ridesCompleted: r.ridesCompleted as number,
+              dayRides: (r.dayRides as number) ?? 0,
+              weekendRides: (r.weekendRides as number) ?? 0,
+              multiDayRides: (r.multiDayRides as number) ?? 0,
+              expeditionRides: (r.expeditionRides as number) ?? 0,
               ridesOrganized: r.ridesOrganized as number,
               sweepsDone: r.sweepsDone as number,
               totalKm: r.totalKm as number,
@@ -65,6 +68,10 @@ export function RiderArenaPage() {
               userRole: r.userRole as string | null,
               joinDate: r.joinDate as string,
               ridesCompleted: r.ridesCompleted as number,
+              dayRides: (r.dayRides as number) ?? 0,
+              weekendRides: (r.weekendRides as number) ?? 0,
+              multiDayRides: (r.multiDayRides as number) ?? 0,
+              expeditionRides: (r.expeditionRides as number) ?? 0,
               totalKm: r.totalKm as number,
               totalPoints: r.totalPoints as number,
               ridesOrganized: r.ridesOrganized as number,

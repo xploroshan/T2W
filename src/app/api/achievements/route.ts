@@ -26,10 +26,38 @@ function crewNameMatchesRider(crewName: string, riderName: string): boolean {
   return false;
 }
 
-// Participation points by ride type:
-// expedition = 10 pts; day / weekend / multi-day = 5 pts
-function pointsForRideType(type: string): number {
-  return type === "expedition" ? 10 : 5;
+type AchievementSettings = {
+  periodStart: string;
+  periodEnd: string;
+  ptsDay: number;
+  ptsWeekend: number;
+  ptsMultiDay: number;
+  ptsExpedition: number;
+  thresholdPtsDay: number;
+  thresholdPtsWeekend: number;
+  thresholdPtsMultiDay: number;
+  thresholdPtsExpedition: number;
+  pointsPerOrganize: number;
+  pointsPerSweep: number;
+  thresholdPercent: number;
+  // legacy fields (kept for backward compat)
+  pointsPerParticipation?: number;
+};
+
+function participationPtsForType(type: string, s: AchievementSettings): number {
+  if (type === "day") return s.ptsDay ?? 5;
+  if (type === "weekend") return s.ptsWeekend ?? 5;
+  if (type === "multi-day") return s.ptsMultiDay ?? 5;
+  if (type === "expedition") return s.ptsExpedition ?? 10;
+  return s.ptsDay ?? 5;
+}
+
+function thresholdPtsForType(type: string, s: AchievementSettings): number {
+  if (type === "day") return s.thresholdPtsDay ?? 5;
+  if (type === "weekend") return s.thresholdPtsWeekend ?? 5;
+  if (type === "multi-day") return s.thresholdPtsMultiDay ?? 5;
+  if (type === "expedition") return s.thresholdPtsExpedition ?? 5;
+  return s.thresholdPtsDay ?? 5;
 }
 
 // GET /api/achievements - compute period achievement data
@@ -44,14 +72,7 @@ export async function GET() {
       return NextResponse.json({ configured: false, riders: [] });
     }
 
-    const settings = JSON.parse(settingsRow.value) as {
-      periodStart: string;
-      periodEnd: string;
-      pointsPerParticipation: number;
-      pointsPerOrganize: number;
-      pointsPerSweep: number;
-      thresholdPercent: number;
-    };
+    const settings = JSON.parse(settingsRow.value) as AchievementSettings;
 
     if (!settings.periodStart || !settings.periodEnd) {
       return NextResponse.json({ configured: false, riders: [] });
@@ -85,17 +106,19 @@ export async function GET() {
 
     const totalRidesInPeriod = ridesInPeriod.length;
 
-    // Build a map of rideId → participation points (varies by ride type)
+    // Build maps: rideId → participation points and threshold points (per ride type)
     const ridePointsMap: Record<string, number> = {};
+    const rideThresholdMap: Record<string, number> = {};
     for (const ride of ridesInPeriod) {
-      ridePointsMap[ride.id] = pointsForRideType(ride.type);
+      ridePointsMap[ride.id] = participationPtsForType(ride.type, settings);
+      rideThresholdMap[ride.id] = thresholdPtsForType(ride.type, settings);
     }
 
-    // thresholdBase is always 5 pts per ride (fixed, regardless of ride type)
-    const thresholdBase = totalRidesInPeriod * 5;
+    // thresholdBase = sum of per-ride threshold points (configurable per type)
+    const thresholdBase = ridesInPeriod.reduce((sum, r) => sum + thresholdPtsForType(r.type, settings), 0);
     // maxPossible = participation + organize + sweep for every ride
     const maxPossible = ridesInPeriod.reduce(
-      (sum, r) => sum + pointsForRideType(r.type) + settings.pointsPerOrganize + settings.pointsPerSweep,
+      (sum, r) => sum + participationPtsForType(r.type, settings) + settings.pointsPerOrganize + settings.pointsPerSweep,
       0
     );
     const threshold = thresholdBase * (settings.thresholdPercent / 100);
@@ -116,7 +139,7 @@ export async function GET() {
           },
           include: {
             ride: {
-              select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true },
+              select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true, type: true },
             },
           },
         },
@@ -143,9 +166,9 @@ export async function GET() {
           }
         }
 
-        // Sum actual points per participated ride based on ride type
+        // Sum actual participation points per attended ride (by configurable ride type)
         const participationPts = p.participations.reduce(
-          (sum, participation) => sum + (ridePointsMap[participation.ride.id] ?? 5),
+          (sum, participation) => sum + (ridePointsMap[participation.ride.id] ?? participationPtsForType(participation.ride.type ?? "day", settings)),
           0
         );
         const organizePts = ridesOrganizedInPeriod * settings.pointsPerOrganize;
@@ -178,7 +201,10 @@ export async function GET() {
       configured: true,
       periodStart: settings.periodStart,
       periodEnd: settings.periodEnd,
-      pointsPerParticipation: settings.pointsPerParticipation,
+      ptsDay: settings.ptsDay ?? 5,
+      ptsWeekend: settings.ptsWeekend ?? 5,
+      ptsMultiDay: settings.ptsMultiDay ?? 5,
+      ptsExpedition: settings.ptsExpedition ?? 10,
       pointsPerOrganize: settings.pointsPerOrganize,
       pointsPerSweep: settings.pointsPerSweep,
       thresholdPercent: settings.thresholdPercent,
