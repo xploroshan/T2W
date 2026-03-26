@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mockPrisma = {
     riderProfile: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     rideParticipation: { delete: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     user: { updateMany: vi.fn() },
-  },
-}));
+    $transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockPrisma)),
+  };
+  return { prisma: mockPrisma };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),

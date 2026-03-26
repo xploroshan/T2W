@@ -19,9 +19,10 @@ export async function POST(req: NextRequest) {
     const protectedEmails = ["roshan.manuel@gmail.com", "taleson2wheels.official@gmail.com"];
     const protectedUsers = await prisma.user.findMany({
       where: { id: { in: ids }, email: { in: protectedEmails } },
-      select: { id: true },
+      select: { id: true, email: true },
     });
     const protectedIds = new Set(protectedUsers.map((u) => u.id));
+    const skippedEmails = protectedUsers.map((u) => u.email);
     const safeIds = ids.filter((id: string) => !protectedIds.has(id));
 
     const result = await prisma.user.deleteMany({ where: { id: { in: safeIds } } });
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       success: true,
       deletedCount: result.count,
       skippedProtected: protectedIds.size,
+      skippedEmails,
     });
   } catch (error) {
     console.error("[T2W] Bulk delete error:", error);

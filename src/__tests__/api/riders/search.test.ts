@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server';
 vi.mock('@/lib/db', () => ({
   prisma: {
     riderProfile: { findMany: vi.fn() },
+    user: { findMany: vi.fn() },
   },
 }));
 
@@ -52,6 +53,7 @@ describe('GET /api/riders/search', () => {
     vi.mocked(prisma.riderProfile.findMany).mockResolvedValue([
       { id: 'r1', name: 'Test Rider', email: 'test@t2w.com', phone: '9876543210' },
     ] as any);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([]);
 
     const req = new NextRequest(new URL('http://localhost:3000/api/riders/search?q=test'));
     const res = await GET(req);
@@ -64,6 +66,7 @@ describe('GET /api/riders/search', () => {
   it('allows core_member access', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'core_member' } as any);
     vi.mocked(prisma.riderProfile.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([]);
 
     const req = new NextRequest(new URL('http://localhost:3000/api/riders/search?q=a'));
     const res = await GET(req);

@@ -36,6 +36,7 @@ describe('GET /api/site-settings', () => {
   });
 
   it('returns parsed JSON value for existing key', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
     mockFindUnique.mockResolvedValue({
       key: 'hero_stats',
       value: JSON.stringify({ riders: 500, rides: 50 }),
@@ -48,7 +49,32 @@ describe('GET /api/site-settings', () => {
     expect(data.value).toEqual({ riders: 500, rides: 50 });
   });
 
+  it('returns parsed JSON value for public key without auth', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    mockFindUnique.mockResolvedValue({
+      key: 'arena_weights',
+      value: JSON.stringify({ ptsDay: 5 }),
+    });
+
+    const req = createNextRequest('http://localhost:3000/api/site-settings?key=arena_weights');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.value).toEqual({ ptsDay: 5 });
+  });
+
+  it('returns 403 for non-public key without auth', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+
+    const req = createNextRequest('http://localhost:3000/api/site-settings?key=hero_stats');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(403);
+    expect(data.error).toBe('Forbidden');
+  });
+
   it('returns null for non-existent key', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
     mockFindUnique.mockResolvedValue(null);
 
     const req = createNextRequest('http://localhost:3000/api/site-settings?key=nonexistent');
@@ -59,6 +85,7 @@ describe('GET /api/site-settings', () => {
   });
 
   it('returns 500 on error', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
     mockFindUnique.mockRejectedValue(new Error('DB error'));
 
     const req = createNextRequest('http://localhost:3000/api/site-settings?key=test');
