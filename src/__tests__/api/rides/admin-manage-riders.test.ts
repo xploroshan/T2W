@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mockPrisma = {
     riderProfile: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     rideRegistration: {
       findUnique: vi.fn(),
@@ -21,8 +29,10 @@ vi.mock('@/lib/db', () => ({
     ride: {
       update: vi.fn(),
     },
-  },
-}));
+    $transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockPrisma)),
+  };
+  return { prisma: mockPrisma };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -70,6 +80,10 @@ describe('POST /api/rides/[id]/registrations/admin-manage (add rider)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSyncReturningNames([]);
+    // Default: user lookup/auto-link returns already-linked user
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ linkedRiderId: 'rp-1' });
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
 
   it('returns 403 for non-admin user', async () => {
@@ -104,32 +118,45 @@ describe('POST /api/rides/[id]/registrations/admin-manage (add rider)', () => {
     expect(data.error).toBe('riderName is required');
   });
 
-  it('returns 400 when rider has no linked user account', async () => {
+  it('auto-creates user when rider has no linked user account', async () => {
     mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
     mockRiderProfileFindFirst.mockResolvedValue({
       id: 'rp-1',
       name: 'Alice',
+      email: 'alice@test.com',
       linkedUsers: [], // No linked user account
     });
+    // user.findFirst and user.findUnique return null (no existing user)
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    // Auto-create returns a new user
+    (prisma.user.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'user-auto', name: 'Alice', email: 'alice@test.com', phone: '',
+    });
+    mockRegFindUnique.mockResolvedValue(null);
+    mockRegCreate.mockResolvedValue({ id: 'reg-new' });
+    mockParticipationUpsert.mockResolvedValue({});
+    mockSyncReturningNames(['Alice']);
 
     const { status, data } = await parseResponse(
       await callPOST('ride-1', { riderName: 'Alice' })
     );
 
-    expect(status).toBe(400);
-    expect(data.error).toContain('No user account found');
+    expect(status).toBe(200);
+    expect(data.success).toBe(true);
   });
 
-  it('returns 400 when rider profile not found', async () => {
+  it('returns 400 when neither rider profile nor user found', async () => {
     mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
     mockRiderProfileFindFirst.mockResolvedValue(null);
+    (prisma.user.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     const { status, data } = await parseResponse(
       await callPOST('ride-1', { riderName: 'NonExistent' })
     );
 
     expect(status).toBe(400);
-    expect(data.error).toContain('No user account found');
+    expect(data.error).toContain('No rider or user found');
   });
 
   it('creates a confirmed registration for a new rider', async () => {
