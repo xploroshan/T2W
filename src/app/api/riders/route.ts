@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         participations: {
-          include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true } } },
+          include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true, type: true } } },
         },
         linkedUsers: {
           select: { role: true },
@@ -120,6 +120,10 @@ export async function GET(req: NextRequest) {
       mergedIntoId: p.mergedIntoId,
       userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
       ridesCompleted: activeParticipations.length,
+      dayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "day").length,
+      weekendRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "weekend").length,
+      multiDayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "multi-day").length,
+      expeditionRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "expedition").length,
       totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
       totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
       ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({

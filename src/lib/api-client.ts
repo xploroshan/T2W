@@ -317,7 +317,7 @@ export const api = {
       } catch { /* fall through */ }
       return null;
     },
-    save: async (weights: { ridesCompleted: number; ridesOrganized: number; sweepsDone: number; totalKm: number }) => {
+    save: async (weights: { ptsDay: number; ptsWeekend: number; ptsMultiDay: number; ptsExpedition: number; ridesOrganized: number; sweepsDone: number; totalKm: number }) => {
       const res = await fetch("/api/site-settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -342,7 +342,14 @@ export const api = {
     save: async (settings: {
       periodStart: string;
       periodEnd: string;
-      pointsPerParticipation: number;
+      ptsDay: number;
+      ptsWeekend: number;
+      ptsMultiDay: number;
+      ptsExpedition: number;
+      thresholdPtsDay: number;
+      thresholdPtsWeekend: number;
+      thresholdPtsMultiDay: number;
+      thresholdPtsExpedition: number;
       pointsPerOrganize: number;
       pointsPerSweep: number;
       thresholdPercent: number;

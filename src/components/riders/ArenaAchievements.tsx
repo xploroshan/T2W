@@ -34,7 +34,10 @@ type AchievementData = {
   configured: boolean;
   periodStart: string;
   periodEnd: string;
-  pointsPerParticipation: number;
+  ptsDay: number;
+  ptsWeekend: number;
+  ptsMultiDay: number;
+  ptsExpedition: number;
   pointsPerOrganize: number;
   pointsPerSweep: number;
   thresholdPercent: number;
@@ -109,7 +112,7 @@ export function ArenaAchievements() {
           {formatPeriodDate(data.periodStart)} &ndash; {formatPeriodDate(data.periodEnd)}
         </h2>
         <p className="mt-2 text-sm text-t2w-muted">
-          {data.totalRidesInPeriod} rides · Day/Weekend/Multi-day = 5 pts, Expedition = 10 pts · Total base: {data.thresholdBase} pts. Riders achieving ≥ {data.thresholdPercent}% ({data.threshold} pts) are highlighted
+          {data.totalRidesInPeriod} rides · Threshold base: {data.totalRidesInPeriod} × 5 pts = {data.thresholdBase} pts. Riders achieving ≥ {data.thresholdPercent}% ({data.threshold} pts) are highlighted
         </p>
       </div>
 
@@ -141,7 +144,7 @@ export function ArenaAchievements() {
       <div className="mb-6 rounded-xl border border-t2w-border bg-t2w-surface/80 p-4 lg:mx-auto lg:max-w-3xl">
         <p className="text-xs text-t2w-muted">
           <strong className="text-white">Participation:</strong>{" "}
-          Day / Weekend / Multi-day = 5 pts, Expedition = 10 pts ·{" "}
+          Day = {data.ptsDay} pts · Weekend = {data.ptsWeekend} pts · Multi-day = {data.ptsMultiDay} pts · Expedition = {data.ptsExpedition} pts ·{" "}
           <strong className="text-white">Organise</strong> = {data.pointsPerOrganize} pts ·{" "}
           <strong className="text-white">Sweep</strong> = {data.pointsPerSweep} pts
         </p>
