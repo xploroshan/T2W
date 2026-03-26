@@ -72,16 +72,19 @@ export async function GET() {
       return NextResponse.json({ configured: false, riders: [] });
     }
 
-    const settings = JSON.parse(settingsRow.value) as AchievementSettings;
+    let settings: AchievementSettings;
+    try {
+      settings = JSON.parse(settingsRow.value) as AchievementSettings;
+    } catch {
+      return NextResponse.json({ configured: false, riders: [] });
+    }
 
     if (!settings.periodStart || !settings.periodEnd) {
       return NextResponse.json({ configured: false, riders: [] });
     }
 
-    const periodStart = new Date(settings.periodStart);
-    const periodEnd = new Date(settings.periodEnd);
-    // Set periodEnd to end of that day
-    periodEnd.setHours(23, 59, 59, 999);
+    const periodStart = new Date(settings.periodStart + "T00:00:00.000Z");
+    const periodEnd = new Date(settings.periodEnd + "T23:59:59.999Z");
 
     // Get all rides in the period
     const ridesInPeriod = await prisma.ride.findMany({

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+const PUBLIC_KEYS = new Set(["arena_weights", "achievement_settings"]);
+
 // GET /api/site-settings?key=xxx - get a setting by key
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +12,13 @@ export async function GET(req: NextRequest) {
 
     if (!key) {
       return NextResponse.json({ error: "Key required" }, { status: 400 });
+    }
+
+    if (!PUBLIC_KEYS.has(key)) {
+      const user = await getCurrentUser();
+      if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const setting = await prisma.siteSettings.findUnique({

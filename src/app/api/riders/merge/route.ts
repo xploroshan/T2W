@@ -40,55 +40,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Target profile not found" }, { status: 404 });
     }
 
-    // Move participation records from source to target
+    // Move participation records from source to target (wrapped in transaction)
     const targetRideIds = new Set(target.participations.map((p: { rideId: string }) => p.rideId));
     let movedCount = 0;
 
-    for (const participation of source.participations) {
-      if (targetRideIds.has(participation.rideId)) {
-        // Target already has participation for this ride - keep target's, delete source's
-        await prisma.rideParticipation.delete({ where: { id: participation.id } });
-      } else {
-        // Move participation to target
-        await prisma.rideParticipation.update({
-          where: { id: participation.id },
-          data: { riderProfileId: targetId },
-        });
-        movedCount++;
+    await prisma.$transaction(async (tx) => {
+      for (const participation of source.participations) {
+        if (targetRideIds.has(participation.rideId)) {
+          // Target already has participation for this ride - keep target's, delete source's
+          await tx.rideParticipation.delete({ where: { id: participation.id } });
+        } else {
+          // Move participation to target
+          await tx.rideParticipation.update({
+            where: { id: participation.id },
+            data: { riderProfileId: targetId },
+          });
+          movedCount++;
+        }
       }
-    }
 
-    // Accumulate stats
-    await prisma.riderProfile.update({
-      where: { id: targetId },
-      data: {
-        ridesOrganized: target.ridesOrganized + source.ridesOrganized,
-        sweepsDone: target.sweepsDone + source.sweepsDone,
-        pilotsDone: target.pilotsDone + source.pilotsDone,
-        // Use earliest join date
-        joinDate: source.joinDate < target.joinDate ? source.joinDate : target.joinDate,
-        // Fill in missing fields from source if target has empty values
-        phone: target.phone || source.phone,
-        address: target.address || source.address,
-        emergencyContact: target.emergencyContact || source.emergencyContact,
-        emergencyPhone: target.emergencyPhone || source.emergencyPhone,
-        bloodGroup: target.bloodGroup || source.bloodGroup,
-      },
+      // Accumulate stats
+      await tx.riderProfile.update({
+        where: { id: targetId },
+        data: {
+          ridesOrganized: target.ridesOrganized + source.ridesOrganized,
+          sweepsDone: target.sweepsDone + source.sweepsDone,
+          pilotsDone: target.pilotsDone + source.pilotsDone,
+          // Use earliest join date
+          joinDate: source.joinDate < target.joinDate ? source.joinDate : target.joinDate,
+          // Fill in missing fields from source if target has empty values
+          phone: target.phone || source.phone,
+          address: target.address || source.address,
+          emergencyContact: target.emergencyContact || source.emergencyContact,
+          emergencyPhone: target.emergencyPhone || source.emergencyPhone,
+          bloodGroup: target.bloodGroup || source.bloodGroup,
+        },
+      });
+
+      // Mark source as merged
+      await tx.riderProfile.update({
+        where: { id: sourceId },
+        data: { mergedIntoId: targetId },
+      });
+
+      // Re-link any users pointing to the source profile
+      await tx.user.updateMany({
+        where: { linkedRiderId: sourceId },
+        data: { linkedRiderId: targetId },
+      });
     });
 
-    // Mark source as merged
-    await prisma.riderProfile.update({
-      where: { id: sourceId },
-      data: { mergedIntoId: targetId },
-    });
-
-    // Re-link any users pointing to the source profile
-    await prisma.user.updateMany({
-      where: { linkedRiderId: sourceId },
-      data: { linkedRiderId: targetId },
-    });
-
-    // Sync stats for target
+    // Sync stats for target (outside transaction, uses regular prisma client)
     const participations = await prisma.rideParticipation.findMany({
       where: { riderProfileId: targetId },
       include: { ride: { select: { distanceKm: true } } },

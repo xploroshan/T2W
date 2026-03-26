@@ -2,47 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
-// Name normalization for matching crew names to rider profile names
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
-// Known aliases for crew names that differ from profile names
-const crewNameAliases: Record<string, string> = {
-  "suren": "surendar p velu",
-  "surendar": "surendar p velu",
-  "surendar velu": "surendar p velu",
-};
-
-// Check if a crew name matches a rider profile name
-function crewNameMatchesRider(crewName: string, riderName: string): boolean {
-  const crewLower = crewName.toLowerCase().trim();
-  const riderLower = riderName.toLowerCase().trim();
-  if (crewLower === riderLower) return true;
-  if (normalizeName(crewName) === normalizeName(riderName)) return true;
-  const alias = crewNameAliases[crewLower];
-  if (alias && normalizeName(alias) === normalizeName(riderName)) return true;
-  if (!crewLower.includes(" ")) {
-    const riderFirstName = riderLower.split(/\s+/)[0];
-    if (crewLower === riderFirstName) return true;
-  }
-  return false;
-}
-
-// Compute pilot/sweep/organised counts from DB rides for a given rider name
-function computeRideRoleStats(
-  riderName: string,
-  dbRides: Array<{ leadRider: string; sweepRider: string; organisedBy: string | null }>
-): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
-  let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
-  for (const ride of dbRides) {
-    if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
-    if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
-    if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
-  }
-  return { pilotsDone, sweepsDone, ridesOrganized };
-}
-
 // GET /api/riders/[id] - get a single rider profile
 export async function GET(
   _req: NextRequest,
@@ -80,12 +39,6 @@ export async function GET(
       }, { status: 301 });
     }
 
-    // Compute role stats live from all DB rides
-    const allRides = await prisma.ride.findMany({
-      select: { leadRider: true, sweepRider: true, organisedBy: true },
-    });
-    const stats = computeRideRoleStats(profile.name, allRides);
-
     // Exclude dropped-out rides from active stats
     const activeParticipations = profile.participations.filter(
       (p: typeof profile.participations[number]) => !p.droppedOut
@@ -102,7 +55,9 @@ export async function GET(
       bloodGroup: profile.bloodGroup,
       joinDate: profile.joinDate.toISOString(),
       avatarUrl: profile.avatarUrl,
-      ...stats,
+      ridesOrganized: profile.ridesOrganized,
+      sweepsDone: profile.sweepsDone,
+      pilotsDone: profile.pilotsDone,
       userRole: profile.role !== "rider" ? profile.role : (profile.linkedUsers[0]?.role || null),
       ridesCompleted: activeParticipations.length,
       totalKm: activeParticipations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.ride.distanceKm, 0),

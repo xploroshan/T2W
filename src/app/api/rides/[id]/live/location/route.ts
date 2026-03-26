@@ -44,7 +44,7 @@ export async function POST(
           isDeviated = !isOnRoute({ lat, lng }, route, 200);
         }
       } catch {
-        // Invalid route data, skip deviation check
+        console.error("[T2W] Invalid plannedRoute JSON for session", session.id);
       }
     }
 

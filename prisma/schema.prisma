@@ -33,6 +33,8 @@ model User {
   blogPosts         BlogPost[]
   notifications     Notification[]
   riderProfile      RiderProfile? @relation(fields: [linkedRiderId], references: [id])
+
+  @@index([linkedRiderId])
 }
 
 // Rider profile data - the primary record for all riders (imported from Excel/admin)
@@ -78,6 +80,7 @@ model RideParticipation {
   ride         Ride         @relation(fields: [rideId], references: [id], onDelete: Cascade)
 
   @@unique([riderProfileId, rideId])
+  @@index([rideId])
 }
 
 model Motorcycle {

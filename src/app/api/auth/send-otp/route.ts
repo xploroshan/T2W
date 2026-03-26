@@ -32,7 +32,6 @@ export async function POST(req: NextRequest) {
 
     if (!smtpUser || !smtpPass) {
       console.error("[T2W] SMTP credentials not configured.");
-      console.info(`[T2W] OTP for ${emailLower}: ${code}`);
       return NextResponse.json(
         { error: "Email service is not configured. Please contact support." },
         { status: 503 }
@@ -79,7 +78,6 @@ export async function POST(req: NextRequest) {
     } catch (emailErr) {
       const errMsg = emailErr instanceof Error ? emailErr.message : String(emailErr);
       console.error("[T2W] Email send error:", errMsg);
-      console.info(`[T2W] OTP for ${emailLower}: ${code}`);
       return NextResponse.json(
         { error: `Failed to send verification email: ${errMsg}` },
         { status: 502 }

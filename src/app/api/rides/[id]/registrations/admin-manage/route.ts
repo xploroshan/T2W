@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 
 /**
  * POST /api/rides/[id]/registrations/admin-manage
@@ -82,7 +83,7 @@ export async function POST(
       if (existingUserByEmail) {
         linkedUser = existingUserByEmail;
       } else {
-        const placeholderPassword = await bcrypt.hash(`t2w_${Date.now()}_${Math.random()}`, 10);
+        const placeholderPassword = await bcrypt.hash(randomBytes(16).toString("hex"), 10);
         const newUser = await prisma.user.create({
           data: {
             name: riderProfile.name,
@@ -138,44 +139,47 @@ export async function POST(
       }
     }
 
-    // --- Step 5: Create or confirm the RideRegistration ---
-    const existingReg = await prisma.rideRegistration.findUnique({
-      where: { userId_rideId: { userId: linkedUser.id, rideId } },
-    });
+    // --- Steps 5-7: Writes wrapped in a transaction ---
+    await prisma.$transaction(async (tx) => {
+      // Step 5: Create or confirm the RideRegistration
+      const existingReg = await tx.rideRegistration.findUnique({
+        where: { userId_rideId: { userId: linkedUser!.id, rideId } },
+      });
 
-    if (existingReg) {
-      if (existingReg.approvalStatus !== "confirmed") {
-        await prisma.rideRegistration.update({
-          where: { id: existingReg.id },
-          data: { approvalStatus: "confirmed" },
+      if (existingReg) {
+        if (existingReg.approvalStatus !== "confirmed") {
+          await tx.rideRegistration.update({
+            where: { id: existingReg.id },
+            data: { approvalStatus: "confirmed" },
+          });
+        }
+      } else {
+        const confirmationCode = `T2W-${rideId.slice(0, 8).toUpperCase()}-ADM${Date.now().toString(36).toUpperCase()}`;
+        await tx.rideRegistration.create({
+          data: {
+            userId: linkedUser!.id,
+            rideId,
+            riderName: riderProfile?.name || trimmedName,
+            email: linkedUser!.email || "",
+            phone: linkedUser!.phone || "",
+            approvalStatus: "confirmed",
+            confirmationCode,
+          },
         });
       }
-    } else {
-      const confirmationCode = `T2W-${rideId.slice(0, 8).toUpperCase()}-ADM${Date.now().toString(36).toUpperCase()}`;
-      await prisma.rideRegistration.create({
-        data: {
-          userId: linkedUser.id,
-          rideId,
-          riderName: riderProfile?.name || trimmedName,
-          email: linkedUser.email || "",
-          phone: linkedUser.phone || "",
-          approvalStatus: "confirmed",
-          confirmationCode,
-        },
-      });
-    }
 
-    // --- Step 6: Sync RideParticipation for leaderboard ---
-    if (riderProfile) {
-      await prisma.rideParticipation.upsert({
-        where: { riderProfileId_rideId: { riderProfileId: riderProfile.id, rideId } },
-        update: { droppedOut: false },
-        create: { riderProfileId: riderProfile.id, rideId, points: 5 },
-      });
-    }
+      // Step 6: Sync RideParticipation for leaderboard
+      if (riderProfile) {
+        await tx.rideParticipation.upsert({
+          where: { riderProfileId_rideId: { riderProfileId: riderProfile.id, rideId } },
+          update: { droppedOut: false },
+          create: { riderProfileId: riderProfile.id, rideId, points: 5 },
+        });
+      }
 
-    // --- Step 7: Sync Ride.riders cache ---
-    await syncRideRidersFromRegistrations(rideId);
+      // Step 7: Sync Ride.riders cache
+      await syncRideRidersFromRegistrations(rideId, tx);
+    });
 
     return NextResponse.json({ success: true, riderName: riderProfile?.name || trimmedName });
   } catch (error) {
@@ -241,13 +245,19 @@ export async function DELETE(
   }
 }
 
+type SyncClient = {
+  rideRegistration: typeof prisma.rideRegistration;
+  ride: typeof prisma.ride;
+};
+
 /**
  * Sync the Ride.riders JSON field from confirmed RideRegistration records.
  * This is the SINGLE SOURCE OF TRUTH — no longer syncing from RideParticipation.
+ * Accepts an optional transaction client so it can run inside a transaction.
  */
-async function syncRideRidersFromRegistrations(rideId: string) {
+async function syncRideRidersFromRegistrations(rideId: string, client: SyncClient = prisma) {
   try {
-    const confirmedRegistrations = await prisma.rideRegistration.findMany({
+    const confirmedRegistrations = await client.rideRegistration.findMany({
       where: { rideId, approvalStatus: "confirmed" },
       select: { riderName: true },
       orderBy: { registeredAt: "asc" },
@@ -255,7 +265,7 @@ async function syncRideRidersFromRegistrations(rideId: string) {
 
     const riderNames = confirmedRegistrations.map((r) => r.riderName);
 
-    await prisma.ride.update({
+    await client.ride.update({
       where: { id: rideId },
       data: { riders: JSON.stringify(riderNames) },
     });

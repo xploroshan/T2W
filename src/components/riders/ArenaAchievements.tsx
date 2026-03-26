@@ -112,7 +112,7 @@ export function ArenaAchievements() {
           {formatPeriodDate(data.periodStart)} &ndash; {formatPeriodDate(data.periodEnd)}
         </h2>
         <p className="mt-2 text-sm text-t2w-muted">
-          {data.totalRidesInPeriod} rides · Threshold base: {data.totalRidesInPeriod} × 5 pts = {data.thresholdBase} pts. Riders achieving ≥ {data.thresholdPercent}% ({data.threshold} pts) are highlighted
+          {data.totalRidesInPeriod} rides · Threshold base: {data.thresholdBase} pts. Riders achieving ≥ {data.thresholdPercent}% ({data.threshold} pts) are highlighted
         </p>
       </div>
 
