@@ -4,6 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://taleson2wheels.com"),
@@ -439,6 +440,7 @@ export default function RootLayout({
             gtag('config', 'G-H5032Z7TL4');
           `}
         </Script>
+        <Analytics />
       </body>
     </html>
   );
