@@ -29,6 +29,29 @@ const CSP = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // /home → / on any host (fixes taleson2wheels.com/home 404 too)
+      {
+        source: "/home",
+        destination: "/",
+        permanent: true,
+      },
+      // Redirect all bangaloremotorcycleclub.com traffic → taleson2wheels.com
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "bangaloremotorcycleclub.com" }],
+        destination: "https://www.taleson2wheels.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.bangaloremotorcycleclub.com" }],
+        destination: "https://www.taleson2wheels.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
