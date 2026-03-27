@@ -26,6 +26,12 @@ export const metadata: Metadata = {
     "motorcycle tours Karnataka",
     "Bangalore bikers group",
     "Royal Enfield rides Bangalore",
+    "join motorcycle club Bangalore",
+    "biker community registration India",
+    "upcoming motorcycle rides Bangalore 2025",
+    "bike group Bangalore Instagram",
+    "Tales on 2 Wheels upcoming rides",
+    "T2W registration",
   ],
   alternates: {
     canonical: "https://taleson2wheels.com",
@@ -56,10 +62,12 @@ async function EventSchemas() {
   const schemas = upcomingRides.map((ride) => ({
     "@context": "https://schema.org",
     "@type": "Event",
+    "@id": `https://taleson2wheels.com/ride/${ride.id}#event`,
     name: ride.title,
     description: ride.description,
     startDate: ride.startDate.toISOString(),
     endDate: ride.endDate.toISOString(),
+    url: `https://taleson2wheels.com/ride/${ride.id}`,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
@@ -75,16 +83,23 @@ async function EventSchemas() {
       "@type": "Organization",
       name: "Tales on 2 Wheels",
       url: "https://taleson2wheels.com",
+      "@id": "https://taleson2wheels.com/#organization",
     },
     offers: {
       "@type": "Offer",
       price: ride.fee,
       priceCurrency: "INR",
       url: `https://taleson2wheels.com/ride/${ride.id}`,
-      validFrom: "2026-01-01",
+      availability: "https://schema.org/InStock",
+      validFrom: new Date().toISOString(),
     },
     maximumAttendeeCapacity: ride.maxRiders,
-    image: "https://taleson2wheels.com/og-image.jpg",
+    image: {
+      "@type": "ImageObject",
+      url: "https://taleson2wheels.com/og-image.jpg",
+      width: 1200,
+      height: 630,
+    },
     performer: { "@type": "Person", name: ride.leadRider },
   }));
 
