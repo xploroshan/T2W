@@ -8,14 +8,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   let rides: Array<{ id: string; status: string; startDate: Date }> = [];
   let blogs: Array<{ id: string; publishDate: Date }> = [];
+  let riders: Array<{ id: string }> = [];
 
   try {
-    rides = await prisma.ride.findMany({
-      select: { id: true, status: true, startDate: true },
-    });
-    blogs = await prisma.blogPost.findMany({
-      select: { id: true, publishDate: true },
-    });
+    [rides, blogs, riders] = await Promise.all([
+      prisma.ride.findMany({ select: { id: true, status: true, startDate: true } }),
+      prisma.blogPost.findMany({ select: { id: true, publishDate: true } }),
+      prisma.riderProfile.findMany({ where: { mergedIntoId: null }, select: { id: true } }),
+    ]);
   } catch {
     // DB unavailable during build
   }
@@ -34,12 +34,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
+  const riderUrls = riders.map((rider) => ({
+    url: `${baseUrl}/rider/${rider.id}`,
+    lastModified: new Date(),
+    changeFrequency: "weekly" as const,
+    priority: 0.5,
+  }));
+
   return [
     { url: baseUrl, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
     { url: `${baseUrl}/rides`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${baseUrl}/blogs`, lastModified: new Date(), changeFrequency: "daily", priority: 0.8 },
-    { url: `${baseUrl}/guidelines`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
+    { url: `${baseUrl}/riders`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7 },
+    { url: `${baseUrl}/guidelines`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
     ...rideUrls,
     ...blogUrls,
+    ...riderUrls,
   ];
 }

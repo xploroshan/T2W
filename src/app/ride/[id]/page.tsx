@@ -98,8 +98,10 @@ async function RideEventSchema({ rideId }: { rideId: string }) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "Event",
+    "@id": `https://taleson2wheels.com/ride/${ride.id}#event`,
     name: `${ride.rideNumber} ${ride.title} - Tales on 2 Wheels`,
     description: ride.description,
+    url: `https://taleson2wheels.com/ride/${ride.id}`,
     startDate: ride.startDate,
     endDate: ride.endDate,
     eventStatus: ride.status === "upcoming"
@@ -116,7 +118,12 @@ async function RideEventSchema({ rideId }: { rideId: string }) {
         addressCountry: "IN",
       },
     },
-    organizer: { "@type": "Organization", name: "Tales on 2 Wheels", url: "https://taleson2wheels.com" },
+    organizer: {
+      "@type": "Organization",
+      name: "Tales on 2 Wheels",
+      url: "https://taleson2wheels.com",
+      "@id": "https://taleson2wheels.com/#organization",
+    },
     offers: {
       "@type": "Offer",
       price: ride.fee,
@@ -125,11 +132,16 @@ async function RideEventSchema({ rideId }: { rideId: string }) {
         ? "https://schema.org/InStock"
         : "https://schema.org/SoldOut",
       url: `https://taleson2wheels.com/ride/${ride.id}`,
-      validFrom: "2024-01-01",
+      validFrom: new Date().toISOString(),
     },
     maximumAttendeeCapacity: ride.maxRiders,
     remainingAttendeeCapacity: (ride.maxRiders as number) - registeredRiders,
-    image: "https://taleson2wheels.com/og-image.jpg",
+    image: {
+      "@type": "ImageObject",
+      url: "https://taleson2wheels.com/og-image.jpg",
+      width: 1200,
+      height: 630,
+    },
     performer: ride.leadRider ? { "@type": "Person", name: ride.leadRider } : undefined,
   };
 

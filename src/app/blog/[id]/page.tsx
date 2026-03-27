@@ -76,33 +76,60 @@ async function BlogArticleSchema({ blogId }: { blogId: string }) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
+    "@id": `https://taleson2wheels.com/blog/${blog.id}#article`,
     headline: blog.title,
     description: blog.excerpt,
     articleBody: blog.content,
     datePublished: blog.publishDate.toISOString(),
     dateModified: blog.publishDate.toISOString(),
+    url: `https://taleson2wheels.com/blog/${blog.id}`,
     author: {
       "@type": "Person",
       name: blog.authorName,
+      memberOf: {
+        "@id": "https://taleson2wheels.com/#organization",
+      },
     },
     publisher: {
       "@type": "Organization",
       name: "Tales on 2 Wheels",
       url: "https://taleson2wheels.com",
+      "@id": "https://taleson2wheels.com/#organization",
       logo: {
         "@type": "ImageObject",
         url: "https://taleson2wheels.com/logo.png",
+        width: 512,
+        height: 512,
       },
     },
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": `https://taleson2wheels.com/blog/${blog.id}`,
     },
-    image: "https://taleson2wheels.com/og-image.jpg",
+    isPartOf: {
+      "@type": "Blog",
+      "@id": "https://taleson2wheels.com/blogs#blog",
+      name: "Tales on 2 Wheels - Riding Stories & Moto Blogs",
+      publisher: { "@id": "https://taleson2wheels.com/#organization" },
+    },
+    image: {
+      "@type": "ImageObject",
+      url: "https://taleson2wheels.com/og-image.jpg",
+      width: 1200,
+      height: 630,
+    },
     keywords: tags.join(", "),
     wordCount: blog.content.split(/\s+/).length,
     timeRequired: `PT${blog.readTime}M`,
     inLanguage: "en-IN",
+    speakable: {
+      "@type": "SpeakableSpecification",
+      cssSelector: ["h1", "h2", ".blog-excerpt"],
+    },
+    about: tags.map((tag) => ({
+      "@type": "Thing",
+      name: tag,
+    })),
   };
 
   return (

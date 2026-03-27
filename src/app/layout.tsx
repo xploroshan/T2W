@@ -43,6 +43,16 @@ export const metadata: Metadata = {
     "Ladakh bike trip",
     "Spiti Valley motorcycle ride",
     "best motorcycle rides India",
+    "biker community India",
+    "moto vlog India",
+    "motorcycle adventure India",
+    "ride with us India",
+    "two wheeler tours Bangalore",
+    "moto touring Karnataka",
+    "biker gang Bangalore",
+    "motorcycle expedition India",
+    "biker club registration India",
+    "bike ride registration online",
   ],
   authors: [{ name: "Tales on 2 Wheels" }],
   creator: "T2W Team",
@@ -61,6 +71,12 @@ export const metadata: Metadata = {
         url: "/og-image.jpg",
         width: 1200,
         height: 630,
+        alt: "Tales on 2 Wheels - Motorcycle Riding Community India",
+      },
+      {
+        url: "/og-image-square.jpg",
+        width: 1080,
+        height: 1080,
         alt: "Tales on 2 Wheels - Motorcycle Riding Community India",
       },
     ],
@@ -101,6 +117,7 @@ export const metadata: Metadata = {
   other: {
     "msapplication-TileColor": "#0f0f0f",
     "theme-color": "#e94560",
+    "pinterest-rich-pin": "true",
   },
 };
 
@@ -109,9 +126,15 @@ const organizationSchema = {
   "@type": "Organization",
   "@id": "https://taleson2wheels.com/#organization",
   name: "Tales on 2 Wheels",
-  alternateName: ["T2W", "Tales on Two Wheels"],
+  alternateName: ["T2W", "Tales on Two Wheels", "T2W Rides"],
   url: "https://taleson2wheels.com",
-  logo: "https://taleson2wheels.com/logo.png",
+  logo: {
+    "@type": "ImageObject",
+    url: "https://taleson2wheels.com/logo.png",
+    width: 512,
+    height: 512,
+  },
+  image: "https://taleson2wheels.com/og-image.jpg",
   description:
     "India's premier motorcycle riding community based in Bangalore. Organizing group rides, motorcycle tours, and building a passionate riding community across India since 2023.",
   foundingDate: "2023",
@@ -125,31 +148,15 @@ const organizationSchema = {
     },
   },
   areaServed: [
-    {
-      "@type": "Country",
-      name: "India",
-    },
-    {
-      "@type": "State",
-      name: "Karnataka",
-    },
-    {
-      "@type": "City",
-      name: "Bangalore",
-    },
-    {
-      "@type": "City",
-      name: "Mysore",
-    },
-    {
-      "@type": "City",
-      name: "Mangalore",
-    },
+    { "@type": "Country", name: "India" },
+    { "@type": "State", name: "Karnataka" },
+    { "@type": "City", name: "Bangalore" },
+    { "@type": "City", name: "Mysore" },
+    { "@type": "City", name: "Mangalore" },
   ],
   contactPoint: {
     "@type": "ContactPoint",
-    email: "ride@taleson2wheels.com",
-    telephone: "+919876543210",
+    email: "taleson2wheels.official@gmail.com",
     contactType: "customer service",
     availableLanguage: ["English", "Hindi", "Kannada"],
   },
@@ -158,6 +165,36 @@ const organizationSchema = {
     "https://youtube.com/@taleson2wheels",
     "https://facebook.com/taleson2wheels",
   ],
+  knowsAbout: [
+    "Motorcycle touring",
+    "Group motorcycle rides",
+    "Motorcycle safety",
+    "Adventure motorcycling",
+    "Motorcycle travel India",
+    "Bike tours Karnataka",
+    "Long distance motorcycle rides",
+    "Ladakh bike trip",
+    "Royal Enfield touring",
+    "KTM adventure riding",
+  ],
+  hasOfferCatalog: {
+    "@type": "OfferCatalog",
+    name: "Motorcycle Rides & Tours",
+    itemListElement: [
+      {
+        "@type": "Offer",
+        itemOffered: {
+          "@type": "Service",
+          name: "Group Motorcycle Rides",
+          description: "Organised group motorcycle rides across India",
+        },
+      },
+    ],
+  },
+  speakable: {
+    "@type": "SpeakableSpecification",
+    cssSelector: ["h1", "h2", ".hero-description"],
+  },
   numberOfEmployees: {
     "@type": "QuantitativeValue",
     value: 5,
@@ -170,10 +207,19 @@ const websiteSchema = {
   "@id": "https://taleson2wheels.com/#website",
   url: "https://taleson2wheels.com",
   name: "Tales on 2 Wheels",
+  alternateName: "T2W",
   description:
     "Motorcycle riding community platform for group rides across India",
   publisher: { "@id": "https://taleson2wheels.com/#organization" },
   inLanguage: "en-IN",
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: "https://taleson2wheels.com/rides?q={search_term_string}",
+    },
+    "query-input": "required name=search_term_string",
+  },
 };
 
 const localBusinessSchema = {
@@ -184,14 +230,11 @@ const localBusinessSchema = {
   description:
     "Motorcycle riding community organizing group rides from Bangalore to destinations across Karnataka and India. Weekly rides, weekend getaways, and multi-day expeditions.",
   url: "https://taleson2wheels.com",
-  telephone: "+919876543210",
-  email: "ride@taleson2wheels.com",
+  email: "taleson2wheels.official@gmail.com",
   address: {
     "@type": "PostalAddress",
-    streetAddress: "Brigade Road",
     addressLocality: "Bangalore",
     addressRegion: "Karnataka",
-    postalCode: "560001",
     addressCountry: "IN",
   },
   geo: {
@@ -201,13 +244,11 @@ const localBusinessSchema = {
   },
   openingHours: "Sa 06:00-18:00",
   priceRange: "₹300 - ₹25,000",
-  aggregateRating: {
-    "@type": "AggregateRating",
-    ratingValue: "4.9",
-    reviewCount: "156",
-    bestRating: "5",
-    worstRating: "1",
-  },
+  sport: "Motorcycling",
+  sameAs: [
+    "https://instagram.com/taleson2wheels",
+    "https://facebook.com/taleson2wheels",
+  ],
 };
 
 const breadcrumbSchema = {
