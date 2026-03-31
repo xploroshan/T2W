@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://taleson2wheels.com"),
   title: {
     default:
-      "T2W - Tales on 2 Wheels | Bangalore Motorcycle Club & Bike Group",
+      "T2W - Tales on 2 Wheels | Motorcycle Club From Bangalore & Bike Group",
     template: "%s | T2W - Tales on 2 Wheels",
   },
   description:
