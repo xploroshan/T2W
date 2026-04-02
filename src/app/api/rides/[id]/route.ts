@@ -91,6 +91,7 @@ export async function GET(
       regOpenCore: ride.regOpenCore?.toISOString() || null,
       regOpenT2w: ride.regOpenT2w?.toISOString() || null,
       regOpenRider: ride.regOpenRider?.toISOString() || null,
+      detailsVisible: ride.detailsVisible,
       participations: ride.participations.map((p) => ({
         id: p.id,
         riderProfileId: p.riderProfile.id,
@@ -131,6 +132,7 @@ export async function PUT(
       "distanceKm", "maxRiders", "difficulty", "description",
       "posterUrl", "fee", "leadRider", "sweepRider",
       "organisedBy", "accountsBy", "meetupTime", "rideStartTime", "startingPoint",
+      "detailsVisible",
     ];
 
     for (const field of allowedFields) {

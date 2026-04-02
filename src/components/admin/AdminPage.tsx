@@ -20,6 +20,7 @@ import {
   BarChart3,
   TrendingUp,
   Eye,
+  EyeOff,
   Lock,
   Copyright,
   Loader2,
@@ -81,6 +82,7 @@ type AdminRide = {
   endLocation: string;
   distanceKm: number;
   registeredRiders: number;
+  detailsVisible?: boolean;
 };
 
 type ContentItem = {
@@ -428,6 +430,20 @@ export function AdminPage() {
     } catch {
       // Revert on failure
       setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, status: previousStatus } : r));
+    }
+  };
+
+  const toggleRideDetailsVisible = async (rideId: string) => {
+    const ride = rides.find((r) => r.id === rideId);
+    if (!ride) return;
+    const newValue = !ride.detailsVisible;
+    // Optimistic update
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, detailsVisible: newValue } : r));
+    try {
+      await api.rides.update(rideId, { detailsVisible: newValue });
+    } catch {
+      // Revert on failure
+      setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, detailsVisible: !newValue } : r));
     }
   };
 
@@ -1571,6 +1587,16 @@ export function AdminPage() {
                       <Link href={`/ride/${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
                         <Eye className="h-3.5 w-3.5" />View
                       </Link>
+                      {isCoreOrAbove && (
+                        <button
+                          onClick={() => toggleRideDetailsVisible(ride.id)}
+                          title={ride.detailsVisible ? "Details visible to confirmed riders — click to hide" : "Details hidden — click to show to confirmed riders"}
+                          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-colors ${ride.detailsVisible ? "bg-green-400/20 text-green-400 hover:bg-green-400/30" : "bg-t2w-surface-light text-t2w-muted hover:text-white"}`}
+                        >
+                          {ride.detailsVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                          {ride.detailsVisible ? "Details: On" : "Details: Off"}
+                        </button>
+                      )}
                       {isCoreOrAbove && (
                         <button onClick={() => loadRegistrations(ride.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-colors ${managingRegsRideId === ride.id ? "bg-blue-400/20 text-blue-400" : "bg-blue-400/10 text-blue-400 hover:bg-blue-400/20"}`}>
                           <ClipboardList className="h-3.5 w-3.5" />{managingRegsRideId === ride.id ? "Close" : "Manage"}
