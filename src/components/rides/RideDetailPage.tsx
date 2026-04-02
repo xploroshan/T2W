@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Copy,
   Smartphone,
+  Lock,
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { api } from "@/lib/api-client";
@@ -255,6 +256,7 @@ interface Ride {
   regOpenCore?: string | null;
   regOpenT2w?: string | null;
   regOpenRider?: string | null;
+  detailsVisible?: boolean;
   participations?: {
     id: string;
     riderProfileId: string;
@@ -307,6 +309,13 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+
+  // Visibility gating: Route, Quick Info, and Riders List are restricted.
+  // Always visible to Core Members and Super Admins.
+  // Visible to others only when the admin has enabled detailsVisible for this ride
+  // AND the user has a confirmed registration for this specific ride.
+  const isPrivileged = isSuperAdmin || user?.role === "core_member";
+  const canViewRideDetails = isPrivileged || (!!ride?.detailsVisible && approvalStatus === "confirmed");
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
   const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
@@ -842,26 +851,33 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               ))}
             </div>
 
-            {/* Route */}
-            <div className="card">
-              <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
-                <Route className="h-5 w-5 text-t2w-accent" />
-                Route
-              </h3>
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                {ride.route.map((stop, i) => (
-                  <div key={stop} className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 rounded-lg bg-t2w-surface-light px-3 py-2 text-sm text-white whitespace-nowrap">
-                      <MapPin className="h-3.5 w-3.5 text-t2w-accent" />
-                      {stop}
+            {/* Route — visible to privileged users or confirmed registered riders when enabled */}
+            {canViewRideDetails ? (
+              <div className="card">
+                <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+                  <Route className="h-5 w-5 text-t2w-accent" />
+                  Route
+                </h3>
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  {ride.route.map((stop, i) => (
+                    <div key={stop} className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 rounded-lg bg-t2w-surface-light px-3 py-2 text-sm text-white whitespace-nowrap">
+                        <MapPin className="h-3.5 w-3.5 text-t2w-accent" />
+                        {stop}
+                      </div>
+                      {i < ride.route.length - 1 && (
+                        <span className="text-t2w-muted">&rarr;</span>
+                      )}
                     </div>
-                    {i < ride.route.length - 1 && (
-                      <span className="text-t2w-muted">&rarr;</span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="card flex items-center gap-3 text-t2w-muted">
+                <Lock className="h-4 w-4 shrink-0" />
+                <p className="text-sm">Route details are visible to confirmed registered riders once enabled by the organiser.</p>
+              </div>
+            )}
 
             {/* Highlights */}
             {ride.highlights.length > 0 && (
@@ -936,8 +952,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               </div>
             </div>
 
-            {/* Confirmed Riders - for upcoming rides */}
-            {ride.status === "upcoming" && ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0 && (
+            {/* Confirmed Riders - for upcoming rides, gated by detailsVisible */}
+            {canViewRideDetails && ride.status === "upcoming" && ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0 && (
               <div className="card">
                 <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
                   <Users className="h-5 w-5 text-green-400" />
@@ -982,8 +998,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               </div>
             )}
 
-            {/* Riders List - for completed rides with rider data */}
-            {ride.status === "completed" && ((ride.riders && ride.riders.length > 0) || (ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0) || (ride.participations && ride.participations.length > 0)) && (() => {
+            {/* Riders List - for completed rides, gated by detailsVisible */}
+            {canViewRideDetails && ride.status === "completed" && ((ride.riders && ride.riders.length > 0) || (ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0) || (ride.participations && ride.participations.length > 0)) && (() => {
               const confirmedNames = ride.confirmedRiderNames ?? [];
               const participationNames = (ride.participations ?? []).filter((p) => !p.droppedOut).map((p) => p.riderName);
               const staticRiders = ride.riders ?? [];
@@ -1687,8 +1703,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               </div>
             )}
 
-            {/* Quick Info */}
-            <div className="card">
+            {/* Quick Info — gated by detailsVisible */}
+            {canViewRideDetails && <div className="card">
               <h4 className="mb-3 text-sm font-semibold text-t2w-muted uppercase tracking-wider">
                 Quick Info
               </h4>
@@ -1786,7 +1802,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       </div>

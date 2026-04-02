@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
       regOpenCore: r.regOpenCore?.toISOString() || null,
       regOpenT2w: r.regOpenT2w?.toISOString() || null,
       regOpenRider: r.regOpenRider?.toISOString() || null,
+      detailsVisible: r.detailsVisible,
     }));
 
     // Apply status filter after dynamic status computation
