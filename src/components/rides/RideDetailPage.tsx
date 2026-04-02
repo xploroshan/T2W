@@ -31,6 +31,9 @@ import {
   Copy,
   Smartphone,
   Lock,
+  Share2,
+  Check,
+  X,
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { api } from "@/lib/api-client";
@@ -318,6 +321,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const canViewRideDetails = isPrivileged || (!!ride?.detailsVisible && approvalStatus === "confirmed");
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
+  const [showSharePanel, setShowSharePanel] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
   const [riderIdToAvatar, setRiderIdToAvatar] = useState<Record<string, string>>({});
   const [riderIdToRole, setRiderIdToRole] = useState<Record<string, string>>({});
@@ -734,20 +739,105 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           </h1>
           <p className="mt-4 text-lg text-t2w-muted">{ride.description}</p>
 
-          {/* Live Tracking Button */}
-          {(ride.status === "ongoing" || ride.status === "completed") && (
-            <Link
-              href={`/ride/${ride.id}/live`}
-              className={`mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                ride.status === "ongoing"
-                  ? "bg-green-600 hover:bg-green-700 text-white animate-pulse"
-                  : "bg-gray-600 hover:bg-gray-700 text-white"
-              }`}
-            >
-              <MapPin className="h-4 w-4" />
-              {ride.status === "ongoing" ? "Live Tracking" : "View Ride Map"}
-            </Link>
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {/* Live Tracking Button */}
+            {(ride.status === "ongoing" || ride.status === "completed") && (
+              <Link
+                href={`/ride/${ride.id}/live`}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  ride.status === "ongoing"
+                    ? "bg-green-600 hover:bg-green-700 text-white animate-pulse"
+                    : "bg-gray-600 hover:bg-gray-700 text-white"
+                }`}
+              >
+                <MapPin className="h-4 w-4" />
+                {ride.status === "ongoing" ? "Live Tracking" : "View Ride Map"}
+              </Link>
+            )}
+
+            {/* Share Button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSharePanel((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-t2w-border bg-t2w-surface px-4 py-2 text-sm font-medium text-t2w-muted transition-colors hover:border-t2w-accent/50 hover:text-white"
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </button>
+
+              {showSharePanel && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-t2w-border bg-t2w-surface p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">Share this ride</span>
+                    <button onClick={() => setShowSharePanel(false)} className="text-t2w-muted hover:text-white">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* WhatsApp */}
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`🏍️ ${ride.rideNumber} ${ride.title}\n${ride.distanceKm} km ${ride.type} ride | ${ride.startLocation} → ${ride.endLocation}\n\nhttps://taleson2wheels.com/ride/${ride.id}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white transition-colors hover:bg-[#25D366]/20"
+                      onClick={() => setShowSharePanel(false)}
+                    >
+                      <svg className="h-5 w-5 shrink-0 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                      </svg>
+                      WhatsApp
+                    </a>
+
+                    {/* Twitter / X */}
+                    <a
+                      href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(`https://taleson2wheels.com/ride/${ride.id}`)}&text=${encodeURIComponent(`🏍️ ${ride.rideNumber} ${ride.title} — ${ride.distanceKm} km ride by @TalesOn2Wheels`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white transition-colors hover:bg-white/10"
+                      onClick={() => setShowSharePanel(false)}
+                    >
+                      <svg className="h-5 w-5 shrink-0 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      Twitter / X
+                    </a>
+
+                    {/* Facebook */}
+                    <a
+                      href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`https://taleson2wheels.com/ride/${ride.id}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white transition-colors hover:bg-[#1877F2]/20"
+                      onClick={() => setShowSharePanel(false)}
+                    >
+                      <svg className="h-5 w-5 shrink-0 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      </svg>
+                      Facebook
+                    </a>
+
+                    {/* Copy Link */}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://taleson2wheels.com/ride/${ride.id}`);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white transition-colors hover:bg-t2w-surface-light"
+                    >
+                      {linkCopied ? (
+                        <Check className="h-5 w-5 shrink-0 text-green-400" />
+                      ) : (
+                        <Copy className="h-5 w-5 shrink-0 text-t2w-muted" />
+                      )}
+                      {linkCopied ? "Link copied!" : "Copy link"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Ride Poster */}
