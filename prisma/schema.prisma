@@ -59,6 +59,7 @@ model RiderProfile {
   sweepsDone       Int      @default(0)
   pilotsDone       Int      @default(0)
   mergedIntoId     String?  // if this profile was merged into another
+  notifyRides      Boolean  @default(true) // admin can disable ride announcement emails
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
