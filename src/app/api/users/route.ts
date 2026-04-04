@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
           role: true,
           joinDate: true,
           phone: true,
+          notifyRides: true,
         },
       });
 
@@ -88,7 +89,7 @@ export async function GET(req: NextRequest) {
           joinDate: r.joinDate?.toISOString().split("T")[0] ?? "2024-03-16",
           linkedRiderId: r.id,
           phone: r.phone,
-          notifyRides: true,
+          notifyRides: r.notifyRides,
           adminNotifySelected: true,
           hasAccount: false,
         })),

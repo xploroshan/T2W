@@ -467,7 +467,7 @@ export function AdminPage() {
 
   const toggleUserNotifyRides = async (userId: string) => {
     const u = allUsers.find((u) => u.id === userId);
-    if (!u || !u.hasAccount) return;
+    if (!u) return;
     const newValue = !(u.notifyRides ?? true);
     setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, notifyRides: newValue } : x));
     try {
@@ -1381,23 +1381,19 @@ export function AdminPage() {
                           {new Date(u.joinDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
                         </td>
                         <td className="py-3 text-center">
-                          {u.hasAccount ? (
-                            <button
-                              onClick={() => toggleUserNotifyRides(u.id)}
-                              title={(u.notifyRides ?? true) ? "Notifications ON — click to disable" : "Notifications OFF — click to enable"}
-                              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                                (u.notifyRides ?? true) ? "bg-t2w-accent" : "bg-t2w-surface-light"
+                          <button
+                            onClick={() => toggleUserNotifyRides(u.id)}
+                            title={(u.notifyRides ?? true) ? "Notifications ON — click to disable" : "Notifications OFF — click to enable"}
+                            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                              (u.notifyRides ?? true) ? "bg-t2w-accent" : "bg-t2w-surface-light"
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${
+                                (u.notifyRides ?? true) ? "translate-x-4" : "translate-x-0"
                               }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${
-                                  (u.notifyRides ?? true) ? "translate-x-4" : "translate-x-0"
-                                }`}
-                              />
-                            </button>
-                          ) : (
-                            <span className="text-t2w-muted/30 text-xs">—</span>
-                          )}
+                            />
+                          </button>
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1">

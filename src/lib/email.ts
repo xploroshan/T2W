@@ -162,17 +162,35 @@ export async function sendRideAnnouncementEmails(
     select: { email: true, name: true },
   });
 
-  if (users.length === 0) return;
+  // Also include unlinked rider profiles (no User account) with notifyRides=true.
+  // For "selected" mode, unlinked riders are always included when notifyRides=true
+  // (they have no adminNotifySelected concept — they were added by the admin).
+  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+  const unlinkedProfiles = await prisma.riderProfile.findMany({
+    where: {
+      notifyRides: true,
+      mergedIntoId: null,
+      email: { not: "" },
+    },
+    select: { email: true, name: true },
+  });
+  // Deduplicate: skip profiles whose email already covered by a User account
+  const unlinkedRecipients = unlinkedProfiles.filter(
+    (p) => !userEmails.has(p.email.toLowerCase())
+  );
+
+  const allRecipients = [...users, ...unlinkedRecipients];
+  if (allRecipients.length === 0) return;
 
   const subject = `New Ride: ${ride.rideNumber} ${ride.title} — ${ride.startLocation} → ${ride.endLocation}`;
   const html = rideAnnouncementHtml(ride);
 
   const results = await Promise.allSettled(
-    users.map((u) => sendEmail(u.email, subject, html))
+    allRecipients.map((u) => sendEmail(u.email, subject, html))
   );
 
   const failed = results.filter((r) => r.status === "rejected").length;
   console.log(
-    `[T2W] Ride announcement emails: ${results.length - failed} sent, ${failed} failed (mode: ${notifyMode})`
+    `[T2W] Ride announcement emails: ${results.length - failed} sent, ${failed} failed (mode: ${notifyMode}, users: ${users.length}, profiles: ${unlinkedRecipients.length})`
   );
 }

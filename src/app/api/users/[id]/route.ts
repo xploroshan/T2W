@@ -108,6 +108,7 @@ export async function PUT(
       if (data.email !== undefined) riderUpdate.email = data.email;
       if (data.phone !== undefined) riderUpdate.phone = data.phone;
       if (data.role !== undefined) riderUpdate.role = data.role;
+      if (data.notifyRides !== undefined) riderUpdate.notifyRides = Boolean(data.notifyRides);
       await prisma.riderProfile.update({ where: { id }, data: riderUpdate });
       // Also update linked User if exists
       const linkedUser = await prisma.user.findFirst({ where: { linkedRiderId: id } });
