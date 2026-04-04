@@ -27,6 +27,8 @@ export async function GET(
         phone: true,
         city: true,
         ridingExperience: true,
+        notifyRides: true,
+        adminNotifySelected: true,
       },
     });
 
@@ -81,6 +83,8 @@ export async function PUT(
       updateData.role = String(data.role);
     }
     if (data.isApproved !== undefined) updateData.isApproved = Boolean(data.isApproved);
+    if (data.notifyRides !== undefined) updateData.notifyRides = Boolean(data.notifyRides);
+    if (data.adminNotifySelected !== undefined) updateData.adminNotifySelected = Boolean(data.adminNotifySelected);
 
     // Try updating User record first
     let user = await prisma.user.findUnique({ where: { id } });

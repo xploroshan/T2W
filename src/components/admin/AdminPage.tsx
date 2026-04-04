@@ -71,6 +71,9 @@ type AllUser = {
   role: string;
   isApproved: boolean;
   joinDate: string;
+  notifyRides?: boolean;
+  adminNotifySelected?: boolean;
+  hasAccount?: boolean;
 };
 
 type AdminRide = {
@@ -237,6 +240,7 @@ export function AdminPage() {
   const [rideFormUpiOverride, setRideFormUpiOverride] = useState(false);
   const [rideFormUpiIds, setRideFormUpiIds] = useState<{ label: string; id: string }[]>([{ label: "", id: "" }]);
   const [rideFormRegSchedule, setRideFormRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
+  const [rideFormNotifyMode, setRideFormNotifyMode] = useState<"all" | "none" | "selected">("all");
   const [publishingRide, setPublishingRide] = useState(false);
 
   // Edit ride state
@@ -446,6 +450,18 @@ export function AdminPage() {
     } catch {
       // Revert on failure
       setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, detailsVisible: !newValue } : r));
+    }
+  };
+
+  const toggleAdminNotifySelected = async (userId: string) => {
+    const u = allUsers.find((u) => u.id === userId);
+    if (!u || !u.hasAccount) return;
+    const newValue = !(u.adminNotifySelected ?? true);
+    setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, adminNotifySelected: newValue } : x));
+    try {
+      await api.users.update(userId, { adminNotifySelected: newValue });
+    } catch {
+      setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, adminNotifySelected: !newValue } : x));
     }
   };
 
@@ -870,6 +886,7 @@ export function AdminPage() {
         regOpenCore: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenCore ? new Date(rideFormRegSchedule.regOpenCore).toISOString() : null,
         regOpenT2w: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenT2w ? new Date(rideFormRegSchedule.regOpenT2w).toISOString() : null,
         regOpenRider: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenRider ? new Date(rideFormRegSchedule.regOpenRider).toISOString() : null,
+        notifyMode: rideFormNotifyMode,
       });
       const newRide = (result as { ride: AdminRide }).ride;
       setRides((prev) => [newRide, ...prev]);
@@ -887,6 +904,7 @@ export function AdminPage() {
       setRideFormUseCustomSettings(false);
       setRideFormCustomSettings([]);
       setRideFormRegSchedule({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
+      setRideFormNotifyMode("all");
     } catch (err) {
       console.error("Failed to create ride:", err);
     } finally {
@@ -1289,6 +1307,7 @@ export function AdminPage() {
                           <ArrowUpDown className={`h-3 w-3 ${userSort === "joined" ? "text-t2w-accent" : ""}`} />
                         </button>
                       </th>
+                      <th className="pb-3 text-center text-xs font-semibold uppercase tracking-wider text-t2w-muted" title="Include in Notify Selected emails">Notify</th>
                       <th className="pb-3 text-right text-xs font-semibold uppercase tracking-wider text-t2w-muted">Actions</th>
                     </tr>
                   </thead>
@@ -1348,6 +1367,23 @@ export function AdminPage() {
                         </td>
                         <td className="py-3 text-xs text-t2w-muted">
                           {new Date(u.joinDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                        </td>
+                        <td className="py-3 text-center">
+                          {u.hasAccount ? (
+                            <button
+                              onClick={() => toggleAdminNotifySelected(u.id)}
+                              title={(u.adminNotifySelected ?? true) ? "In Notify Selected group — click to remove" : "Not in Notify Selected group — click to add"}
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded transition-colors ${
+                                (u.adminNotifySelected ?? true)
+                                  ? "text-t2w-accent hover:text-white"
+                                  : "text-t2w-muted hover:text-t2w-accent"
+                              }`}
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-t2w-muted/30 text-xs">—</span>
+                          )}
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -1542,6 +1578,42 @@ export function AdminPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Notification Mode */}
+                  <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Mail className="h-4 w-4 text-t2w-accent" />
+                      <h4 className="text-sm font-medium text-white">Email Notification</h4>
+                    </div>
+                    <p className="text-xs text-t2w-muted mb-3">Choose who receives an email announcement when this ride is published.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        { value: "all", label: "Notify All", desc: "Everyone with notifications on" },
+                        { value: "selected", label: "Notify Selected", desc: "Only members in the Selected group" },
+                        { value: "none", label: "No Notification", desc: "Skip email entirely" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setRideFormNotifyMode(opt.value)}
+                          title={opt.desc}
+                          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            rideFormNotifyMode === opt.value
+                              ? opt.value === "none"
+                                ? "border-red-400/40 bg-red-400/10 text-red-400"
+                                : "border-t2w-accent/40 bg-t2w-accent/10 text-t2w-accent"
+                              : "border-t2w-border bg-t2w-surface text-t2w-muted hover:border-t2w-accent/30 hover:text-white"
+                          }`}
+                        >
+                          {opt.value === "none" ? <EyeOff className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {rideFormNotifyMode === "selected" && (
+                      <p className="mt-2 text-xs text-yellow-400/80">Only users with &quot;Notify Selected&quot; checked in the Users tab will receive this email.</p>
+                    )}
                   </div>
 
                   <div className="sm:col-span-2 flex gap-3">
