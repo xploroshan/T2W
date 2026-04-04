@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
         phone: true,
         city: true,
         ridingExperience: true,
+        notifyRides: true,
+        adminNotifySelected: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -47,6 +49,8 @@ export async function GET(req: NextRequest) {
       joinDate: u.joinDate?.toISOString().split("T")[0] ?? u.createdAt.toISOString().split("T")[0],
       linkedRiderId: u.linkedRiderId,
       phone: u.phone,
+      notifyRides: u.notifyRides,
+      adminNotifySelected: u.adminNotifySelected,
       hasAccount: true,
     }));
 
@@ -84,6 +88,8 @@ export async function GET(req: NextRequest) {
           joinDate: r.joinDate?.toISOString().split("T")[0] ?? "2024-03-16",
           linkedRiderId: r.id,
           phone: r.phone,
+          notifyRides: true,
+          adminNotifySelected: true,
           hasAccount: false,
         })),
       ];

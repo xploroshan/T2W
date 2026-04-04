@@ -29,6 +29,8 @@ import {
   Gem,
   Zap,
   Crown,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
@@ -336,6 +338,14 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
   };
 
   const [saving, setSaving] = useState(false);
+  const [notifyRides, setNotifyRides] = useState<boolean>(true);
+
+  // Load notifyRides from auth context when it becomes available
+  useEffect(() => {
+    if (user?.notifyRides !== undefined) {
+      setNotifyRides(user.notifyRides);
+    }
+  }, [user?.notifyRides]);
 
   const handleSaveProfile = async () => {
     if (!rider) return;
@@ -343,6 +353,10 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     try {
       await api.riders.update(riderId, editForm);
       setRider({ ...rider, ...editForm });
+      // Also save notification preference if this is the user's own profile
+      if (user && user.linkedRiderId === riderId) {
+        await api.users.update(user.id, { notifyRides });
+      }
       setEditing(false);
     } catch (err) {
       console.error("Failed to save profile:", err);
@@ -693,6 +707,28 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 />
               </div>
             </div>
+            {/* Notification preference — only shown on own profile */}
+            {user && user.linkedRiderId === riderId && (
+              <div className="mt-4 rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setNotifyRides((v) => !v)}
+                  className="flex w-full items-center gap-3 text-left"
+                >
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${notifyRides ? "bg-t2w-accent/15 text-t2w-accent" : "bg-t2w-surface-light text-t2w-muted"}`}>
+                    {notifyRides ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white">Notify me when a new ride is announced</p>
+                    <p className="text-xs text-t2w-muted">{notifyRides ? "You will receive email notifications for new rides." : "You won't receive ride announcement emails."}</p>
+                  </div>
+                  <div className={`relative h-5 w-9 rounded-full transition-colors ${notifyRides ? "bg-t2w-accent" : "bg-t2w-surface-light"}`}>
+                    <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${notifyRides ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </div>
+                </button>
+              </div>
+            )}
+
             <div className="mt-4 flex gap-3">
               <button
                 onClick={handleSaveProfile}

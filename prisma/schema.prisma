@@ -24,6 +24,8 @@ model User {
   totalKm        Float    @default(0)
   ridesCompleted Int      @default(0)
   linkedRiderId  String?  // links to RiderProfile.id when email matches
+  notifyRides    Boolean  @default(true)   // user wants email when new ride is posted
+  adminNotifySelected Boolean @default(true) // included in admin's "Notify Selected" group
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

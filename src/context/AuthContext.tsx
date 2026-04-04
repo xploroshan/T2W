@@ -18,6 +18,7 @@ interface UserData {
   totalKm: number;
   ridesCompleted: number;
   linkedRiderId?: string | null;
+  notifyRides?: boolean;
   motorcycles: Array<{
     id: string;
     make: string;

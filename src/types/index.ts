@@ -20,6 +20,7 @@ export interface User {
   totalKm: number;
   ridesCompleted: number;
   linkedRiderId?: string; // links to a RiderProfile by id (matched via email)
+  notifyRides?: boolean; // user wants email notifications when new rides are posted
 }
 
 export interface Motorcycle {

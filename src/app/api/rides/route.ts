@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { computeRideStatus } from "@/lib/ride-status";
 import { safeJsonParse } from "@/lib/json-utils";
+import { sendRideAnnouncementEmails } from "@/lib/email";
 
 // GET /api/rides - list all rides
 export async function GET(req: NextRequest) {
@@ -136,6 +137,26 @@ export async function POST(req: NextRequest) {
         regOpenRider: data.regOpenRider ? new Date(data.regOpenRider) : null,
       },
     });
+
+    // Fire-and-forget email notifications
+    const notifyMode = (data.notifyMode as "all" | "none" | "selected") ?? "all";
+    sendRideAnnouncementEmails(
+      {
+        id: ride.id,
+        rideNumber: ride.rideNumber,
+        title: ride.title,
+        startLocation: ride.startLocation,
+        endLocation: ride.endLocation,
+        startDate: ride.startDate,
+        endDate: ride.endDate,
+        distanceKm: ride.distanceKm,
+        description: ride.description,
+        posterUrl: ride.posterUrl,
+        fee: ride.fee,
+        leadRider: ride.leadRider,
+      },
+      notifyMode
+    ).catch((err) => console.error("[T2W] Ride announcement email error:", err));
 
     return NextResponse.json({ ride: { ...ride, rideNumber } });
   } catch (error) {
