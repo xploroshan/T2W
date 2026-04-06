@@ -936,7 +936,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   icon: IndianRupee,
                   label: "Fee",
                   sublabel: undefined,
-                  value: `₹${ride.fee.toLocaleString()}`,
+                  value: `₹${displayFee.toLocaleString()}`,
+                  sublabel: isExtraBedSlot ? "Extra-bed" : undefined,
                 },
               ].map(({ icon: Icon, label, sublabel, value }) => (
                 <div
@@ -1561,12 +1562,15 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                             {/* Fee banner */}
                             <div className="flex items-center justify-between rounded-xl bg-t2w-accent/10 p-4">
                               <span className="text-sm text-t2w-muted">Registration Fee</span>
-                              <span className="font-display text-2xl font-bold text-t2w-accent">₹{ride.fee.toLocaleString()}</span>
+                              <span className="font-display text-2xl font-bold text-t2w-accent">₹{displayFee.toLocaleString()}</span>
                             </div>
+                            {isExtraBedSlot && (
+                              <p className="-mt-2 text-xs italic text-amber-400">Extra-bed registration</p>
+                            )}
 
                             {/* UPI Payment Cards with QR + deep link */}
                             {effectiveUpiIds.filter(u => u.id).map((upi, idx) => {
-                              const upiParams = `pa=${encodeURIComponent(upi.id)}&pn=${encodeURIComponent("Tales on 2 Wheels")}&am=${ride.fee}&cu=INR&tn=${encodeURIComponent(ride.title)}`;
+                              const upiParams = `pa=${encodeURIComponent(upi.id)}&pn=${encodeURIComponent("Tales on 2 Wheels")}&am=${displayFee}&cu=INR&tn=${encodeURIComponent(ride.title)}`;
                               const upiLink = `upi://pay?${upiParams}`;
                               const gpayLink = `tez://upi/pay?${upiParams}`;
                               const phonepeLink = `phonepe://pay?${upiParams}`;
@@ -1645,7 +1649,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                                         </a>
                                       </div>
                                       <p className="text-xs text-t2w-muted">
-                                        Scan the QR code with any UPI app, or tap a button above to pay ₹{ride.fee.toLocaleString()}.
+                                        Scan the QR code with any UPI app, or tap a button above to pay ₹{displayFee.toLocaleString()}.
                                       </p>
                                     </div>
                                   </div>
