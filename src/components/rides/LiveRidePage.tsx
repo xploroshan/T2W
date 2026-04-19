@@ -49,8 +49,15 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const watchIdRef = useRef<number | null>(null);
   const locationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCoordsRef = useRef<{ lat: number; lng: number; speed: number | null; heading: number | null; accuracy: number | null } | null>(null);
+  const sessionStatusRef = useRef<string | null>(null);
 
   const isAdmin = user?.role === "superadmin" || user?.role === "core_member";
+
+  // Keep a ref in sync so the location-submit interval can read the current status
+  // without stale closure issues (the interval captures the ref, not the state).
+  useEffect(() => {
+    sessionStatusRef.current = session?.status ?? null;
+  }, [session?.status]);
 
   // Load Google Maps script
   useEffect(() => {
@@ -130,9 +137,12 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     }
   }, [session?.status, metrics, fetchMetrics]);
 
-  // Submit a single GPS ping — queue it locally if the network is down
+  // Submit a single GPS ping — queue it locally if the network is down.
+  // Skips silently when the session is paused/ended so we don't queue up
+  // dead pings that can never be flushed (queue only replays on reconnect).
   const submitLocationOrQueue = useCallback(
     async (coords: { lat: number; lng: number; speed?: number | null; heading?: number | null; accuracy?: number | null }) => {
+      if (sessionStatusRef.current !== "live") return;
       try {
         await api.liveSession.submitLocation(rideId, {
           lat: coords.lat,

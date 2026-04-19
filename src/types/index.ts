@@ -190,6 +190,7 @@ export interface LiveRideSession {
   leadRiderId?: string;
   sweepRiderId?: string;
   plannedRoute?: { lat: number; lng: number }[];
+  breaks?: { id: string; startedAt: string; endedAt?: string; reason?: string | null }[];
 }
 
 export interface LiveRiderLocation {
