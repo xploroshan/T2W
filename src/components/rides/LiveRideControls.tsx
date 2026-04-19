@@ -38,7 +38,10 @@ export function LiveRideControls({
   const [showBreakInput, setShowBreakInput] = useState(false);
 
   const status = session?.status || "waiting";
-  const isOnBreak = status === "paused";
+  // True only when paused AND there's a LiveRideBreak record still open (no endedAt).
+  // A plain "Pause" has no break record, so isOnBreak stays false — showing "Resume" instead.
+  const hasOpenBreak = session?.breaks?.some((b) => !b.endedAt) ?? false;
+  const isOnBreak = status === "paused" && hasOpenBreak;
 
   const statusColors: Record<string, string> = {
     waiting: "bg-yellow-100 text-yellow-800",

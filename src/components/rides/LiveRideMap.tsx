@@ -36,21 +36,17 @@ export function LiveRideMap({
   const startMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const endMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
 
-  // Initialize map
+  // Initialize map — runs once on mount. google.maps is already available because
+  // LiveRidePage only renders this component after the Maps script onload fires.
   useEffect(() => {
-    if (!mapRef.current || googleMapRef.current) return;
+    if (!mapRef.current || googleMapRef.current || !window.google?.maps) return;
 
-    const initMap = async () => {
-      if (!window.google?.maps) return;
+    const center = startLocation ||
+      plannedRoute?.[0] ||
+      (riders[0] ? { lat: riders[0].lat, lng: riders[0].lng } : { lat: 12.97, lng: 77.59 });
 
-      const { Map } = await google.maps.importLibrary("maps") as google.maps.MapsLibrary;
-      await google.maps.importLibrary("marker");
-
-      const center = startLocation ||
-        (plannedRoute?.[0]) ||
-        (riders[0] ? { lat: riders[0].lat, lng: riders[0].lng } : { lat: 12.97, lng: 77.59 }); // Bangalore default
-
-      googleMapRef.current = new Map(mapRef.current!, {
+    try {
+      googleMapRef.current = new google.maps.Map(mapRef.current, {
         center,
         zoom: 12,
         mapId: "live-ride-map",
@@ -61,10 +57,11 @@ export function LiveRideMap({
           position: google.maps.ControlPosition.TOP_RIGHT,
         },
       });
-    };
-
-    initMap();
-  }, [startLocation, plannedRoute, riders]);
+    } catch (err) {
+      console.error("[LiveRideMap] Map init failed:", err);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once; startLocation/riders used only for initial center
 
   // Draw planned route (grey dashed)
   useEffect(() => {

@@ -9,16 +9,16 @@ const BASE_URL = "http://localhost:3001";
 const MOCK_SESSION_LIVE = {
   id: "session-live-1",
   rideId: RIDE_ID,
-  status: "live",
+  status: "live" as string,
   startedAt: new Date(Date.now() - 3_600_000).toISOString(),
-  endedAt: null,
+  endedAt: null as string | null,
   leadRiderId: "user-lead",
-  sweepRiderId: null,
+  sweepRiderId: null as string | null,
   plannedRoute: [
     { lat: 24.7, lng: 46.7 },
     { lat: 24.8, lng: 46.8 },
   ],
-  breaks: [],
+  breaks: [] as { id: string; startedAt: string; endedAt?: string | null; reason?: string | null }[],
 };
 
 const MOCK_SESSION_PAUSED = { ...MOCK_SESSION_LIVE, status: "paused" };
@@ -84,13 +84,16 @@ async function mockGoogleMaps(page: Page) {
         "var noop = function(){};",
         "function MapStub(){ this.setCenter=noop; this.setZoom=noop;",
         "  this.setMap=noop; this.setPath=noop; this.setPosition=noop;",
-        "  this.extend=noop; this.addListener=function(){ return {remove:noop}; };",
+        "  this.extend=noop; this.fitBounds=noop; this.panTo=noop;",
+        "  this.addListener=function(){ return {remove:noop}; };",
         "  this.getCenter=function(){ return {lat:noop,lng:noop}; }; }",
         "window.google = { maps: {",
         "  Map: MapStub, Polyline: MapStub, Marker: MapStub,",
         "  LatLng: function(a,b){ this.lat=function(){return a;}; this.lng=function(){return b;}; },",
         "  LatLngBounds: MapStub,",
+        "  ControlPosition: { TOP_RIGHT: 3, TOP_LEFT: 1, BOTTOM_RIGHT: 7, BOTTOM_LEFT: 9 },",
         "  event: { addListener: noop, removeListener: noop },",
+        "  marker: { AdvancedMarkerElement: MapStub },",
         "  Size: MapStub, OverlayView: MapStub",
         "} };",
       ].join("\n"),
@@ -400,10 +403,26 @@ test.describe("Live page — admin controls (superadmin)", () => {
     await expect(page.getByRole("button", { name: /End Ride/i })).toBeVisible();
   });
 
-  test("shows 'End Break / Resume' when session is paused", async ({ page }) => {
+  test("shows 'Resume' when session is paused without an open break", async ({ page }) => {
+    // MOCK_SESSION_PAUSED has breaks:[] — plain Pause, no break record
     await mockAuthAs(page, USERS.superAdmin);
     await mockGoogleMaps(page);
     await mockLiveApi(page, MOCK_SESSION_PAUSED);
+    await goToLivePage(page);
+
+    await expect(page.getByRole("button", { name: /^Resume$/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /End Ride/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /End Break/i })).not.toBeVisible();
+  });
+
+  test("shows 'End Break / Resume' when session is paused with an open break", async ({ page }) => {
+    const sessionWithBreak = {
+      ...MOCK_SESSION_PAUSED,
+      breaks: [{ id: "b1", startedAt: new Date(Date.now() - 300_000).toISOString(), endedAt: null }],
+    };
+    await mockAuthAs(page, USERS.superAdmin);
+    await mockGoogleMaps(page);
+    await mockLiveApi(page, sessionWithBreak);
     await goToLivePage(page);
 
     await expect(page.getByRole("button", { name: /End Break \/ Resume/i })).toBeVisible();
@@ -699,9 +718,9 @@ test.describe("Live API — mocked response shapes", () => {
     await mockGoogleMaps(page);
     await mockLiveApi(page, MOCK_SESSION_LIVE);
 
-    let capturedBreakBody: Record<string, unknown> | null = null;
+    let capturedBreakBody: { action?: string; reason?: string } | null = null;
     await page.route("**" + "/api/rides/" + RIDE_ID + "/live/break**", (route) => {
-      capturedBreakBody = JSON.parse(route.request().postData() || "{}") as Record<string, unknown>;
+      capturedBreakBody = JSON.parse(route.request().postData() || "{}") as { action?: string; reason?: string };
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -725,9 +744,9 @@ test.describe("Live API — mocked response shapes", () => {
     await mockGoogleMaps(page);
     await mockLiveApi(page, MOCK_SESSION_LIVE);
 
-    let capturedBreakBody: Record<string, unknown> | null = null;
+    let capturedBreakBody: { action?: string; reason?: string } | null = null;
     await page.route("**" + "/api/rides/" + RIDE_ID + "/live/break**", (route) => {
-      capturedBreakBody = JSON.parse(route.request().postData() || "{}") as Record<string, unknown>;
+      capturedBreakBody = JSON.parse(route.request().postData() || "{}") as { action?: string; reason?: string };
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -742,8 +761,8 @@ test.describe("Live API — mocked response shapes", () => {
     await page.getByRole("button", { name: /^Start$/i }).click();
     await page.waitForTimeout(300);
 
-    expect(capturedBreakBody).toMatchObject({ action: "start" });
-    expect(capturedBreakBody?.reason).toBeUndefined();
+    // toEqual verifies exact shape: no 'reason' key should be present
+    expect(capturedBreakBody).toEqual({ action: "start" });
   });
 
   test("duplicate break start returns 400 (mocked)", async ({ page }) => {
