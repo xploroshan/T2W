@@ -10,6 +10,7 @@ import {
   enqueueLocation,
   flushLocationQueue,
   getPendingCount,
+  clearQueueForRide,
 } from "@/lib/location-queue";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideControls } from "./LiveRideControls";
@@ -313,6 +314,10 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       await api.liveSession.control(rideId, "end");
       await fetchSession();
       await fetchMetrics();
+      // Free IDB quota — anything still queued is now stranded (the session
+      // is ended server-side, so pings would 4xx and be dropped anyway).
+      await clearQueueForRide(rideId).catch(() => {});
+      setQueuedCount(0);
     } catch (err) {
       alert("Failed to end session");
       console.error(err);

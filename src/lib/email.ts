@@ -203,12 +203,33 @@ export async function sendRideAnnouncementEmails(
   const subject = `New Ride: ${san(ride.rideNumber)} ${san(ride.title)} — ${san(ride.startLocation)} → ${san(ride.endLocation)}`;
   const html = rideAnnouncementHtml(ride);
 
-  const results = await Promise.allSettled(
-    allRecipients.map((u) => sendEmail(u.email, subject, html))
-  );
+  // Gmail caps concurrent SMTP connections hard (~10) and throttles sends
+  // aggressively over ~100/min. Send in small parallel batches to stay
+  // well below the limits; a 500-recipient ride now takes ~50 batches × 5
+  // ≈ serial-ish but bounded.
+  const CONCURRENCY = 5;
+  const failures: { to: string; reason: unknown }[] = [];
+  let sent = 0;
+  for (let i = 0; i < allRecipients.length; i += CONCURRENCY) {
+    const slice = allRecipients.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      slice.map((u) => sendEmail(u.email, subject, html))
+    );
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") {
+        failures.push({ to: slice[idx].email, reason: r.reason });
+      } else {
+        sent += 1;
+      }
+    });
+  }
 
-  const failed = results.filter((r) => r.status === "rejected").length;
+  if (failures.length) {
+    for (const f of failures) {
+      console.error(`[T2W] Announcement email failed (to=${f.to}):`, f.reason);
+    }
+  }
   console.log(
-    `[T2W] Ride announcement emails: ${results.length - failed} sent, ${failed} failed (mode: ${notifyMode}, users: ${users.length}, profiles: ${unlinkedRecipients.length})`
+    `[T2W] Ride announcement emails: ${sent} sent, ${failures.length} failed (mode: ${notifyMode}, users: ${users.length}, profiles: ${unlinkedRecipients.length})`
   );
 }
