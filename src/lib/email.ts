@@ -39,6 +39,24 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   });
 }
 
+type RideTier = "core" | "t2w" | "rider_guest";
+type NotifyMode = "all" | "selected";
+
+type RideEmailPayload = {
+  id: string;
+  rideNumber: string;
+  title: string;
+  startLocation: string;
+  endLocation: string;
+  startDate: Date;
+  endDate: Date;
+  distanceKm: number;
+  description: string;
+  posterUrl: string | null;
+  fee: number;
+  leadRider: string;
+};
+
 function rideAnnouncementHtml(ride: {
   id: string;
   rideNumber: string;
@@ -52,7 +70,7 @@ function rideAnnouncementHtml(ride: {
   posterUrl: string | null;
   fee: number;
   leadRider: string;
-}): string {
+}, headline = "New Ride Announced!"): string {
   const BASE_URL = "https://taleson2wheels.com";
   const rideUrl = `${BASE_URL}/ride/${escapeHtml(ride.id)}`;
   const startDateStr = new Date(ride.startDate).toLocaleDateString("en-IN", {
@@ -85,7 +103,7 @@ function rideAnnouncementHtml(ride: {
           <div style="width: 36px; height: 36px; border-radius: 50%; background: #f5a623; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; color: #0d0d12;">T</div>
           <span style="color: #f5a623; font-size: 14px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;">Tales on 2 Wheels</span>
         </div>
-        <h1 style="margin: 16px 0 0; font-size: 22px; color: #ffffff;">New Ride Announced!</h1>
+        <h1 style="margin: 16px 0 0; font-size: 22px; color: #ffffff;">${escapeHtml(headline)}</h1>
       </div>
 
       <!-- Body -->
@@ -245,4 +263,203 @@ export async function sendRideAnnouncementEmails(
   console.log(
     `[T2W] Ride announcement complete: ${sent} sent, ${failures.length} failed`
   );
+}
+
+// ─── Tier-based announcement (used by scheduled cron jobs) ───────────────────
+
+const TIER_HEADLINE: Record<RideTier, string> = {
+  core: "Registration Open — Core Members",
+  t2w: "Registration Open — T2W Riders",
+  rider_guest: "Registration Now Open!",
+};
+
+const TIER_SUBJECT_LABEL: Record<RideTier, string> = {
+  core: "(Core Members)",
+  t2w: "(T2W Riders)",
+  rider_guest: "",
+};
+
+export async function sendTierAnnouncementEmails(
+  ride: RideEmailPayload,
+  tier: RideTier,
+  notifyMode: NotifyMode
+): Promise<void> {
+  const roleFilter: Record<string, unknown> =
+    tier === "core" ? { role: { in: ["superadmin", "core_member"] } } :
+    tier === "t2w" ? { role: "t2w_rider" } :
+    { role: { in: ["rider"] } };
+
+  const userWhere: Record<string, unknown> = {
+    isApproved: true,
+    email: { not: "" },
+    ...roleFilter,
+  };
+  if (notifyMode === "selected") userWhere.notifyRides = true;
+
+  const users = await prisma.user.findMany({
+    where: userWhere,
+    select: { email: true, name: true },
+  });
+
+  // For rider_guest tier, also include unlinked profiles (all default to rider role)
+  let unlinkedRecipients: { email: string; name: string }[] = [];
+  if (tier === "rider_guest") {
+    const profileWhere: Record<string, unknown> = {
+      mergedIntoId: null,
+      email: { not: "" },
+    };
+    if (notifyMode === "selected") profileWhere.notifyRides = true;
+    const profiles = await prisma.riderProfile.findMany({
+      where: profileWhere,
+      select: { email: true, name: true },
+    });
+    const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    unlinkedRecipients = profiles.filter((p) => !userEmails.has(p.email.toLowerCase()));
+  }
+
+  const allRecipients = [...users, ...unlinkedRecipients];
+  console.log(
+    `[T2W] Tier email (${tier}): mode=${notifyMode}, users=${users.length}, unlinked=${unlinkedRecipients.length}, total=${allRecipients.length}`
+  );
+  if (allRecipients.length === 0) {
+    console.warn(`[T2W] Tier email (${tier}): 0 recipients — no emails sent`);
+    return;
+  }
+
+  const san = (s: string) => s.replace(/[\r\n]/g, " ");
+  const tierLabel = TIER_SUBJECT_LABEL[tier];
+  const subject = `Registration Open${tierLabel ? " " + tierLabel : ""}: ${san(ride.rideNumber)} ${san(ride.title)} — ${san(ride.startLocation)} → ${san(ride.endLocation)}`;
+  const html = rideAnnouncementHtml(ride, TIER_HEADLINE[tier]);
+
+  const CONCURRENCY = 5;
+  const failures: { to: string; reason: unknown }[] = [];
+  let sent = 0;
+  for (let i = 0; i < allRecipients.length; i += CONCURRENCY) {
+    const slice = allRecipients.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(slice.map((u) => sendEmail(u.email, subject, html)));
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") failures.push({ to: slice[idx].email, reason: r.reason });
+      else sent += 1;
+    });
+  }
+  if (failures.length) {
+    for (const f of failures) console.error(`[T2W] Tier email failed (to=${f.to}):`, f.reason);
+  }
+  console.log(`[T2W] Tier email (${tier}) complete: ${sent} sent, ${failures.length} failed`);
+}
+
+// ─── Reminder email (manual push from admin panel) ───────────────────────────
+
+function rideReminderHtml(ride: RideEmailPayload): string {
+  const BASE_URL = "https://taleson2wheels.com";
+  const rideUrl = `${BASE_URL}/ride/${escapeHtml(ride.id)}`;
+  const startDateStr = new Date(ride.startDate).toLocaleDateString("en-IN", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+  const safePosterUrl =
+    ride.posterUrl && ride.posterUrl.startsWith("https://") ? ride.posterUrl :
+    ride.posterUrl && ride.posterUrl.startsWith("/") ? BASE_URL + ride.posterUrl : null;
+  const posterSection = safePosterUrl
+    ? `<div style="margin: 0 0 28px 0; border-radius: 12px; overflow: hidden;"><img src="${escapeHtml(safePosterUrl)}" alt="${escapeHtml(ride.title)}" style="width: 100%; display: block;" /></div>`
+    : "";
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0d0d12; color: #ffffff; border-radius: 16px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px 40px 24px; border-bottom: 3px solid #f5a623;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: #f5a623; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; color: #0d0d12;">T</div>
+          <span style="color: #f5a623; font-size: 14px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;">Tales on 2 Wheels</span>
+        </div>
+        <h1 style="margin: 16px 0 0; font-size: 22px; color: #ffffff;">Don't forget to register!</h1>
+      </div>
+      <div style="padding: 32px 40px;">
+        ${posterSection}
+        <p style="color: #c0c0c0; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+          Registration is still open for <strong style="color: #ffffff;">${escapeHtml(ride.title)}</strong>.
+          If you haven't registered yet, now's the time — spots are limited!
+        </p>
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <p style="margin: 0 0 10px; color: #a0a0b0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Ride Details</p>
+          <p style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff;">${escapeHtml(ride.title)}</p>
+          <p style="margin: 8px 0 4px; font-size: 15px; color: #c0c0c0;">
+            ${escapeHtml(ride.startLocation)} <span style="color: #f5a623; margin: 0 6px;">→</span> ${escapeHtml(ride.endLocation)}
+          </p>
+          <p style="margin: 0; color: #888; font-size: 13px;">${startDateStr} &nbsp;·&nbsp; ${ride.distanceKm} km &nbsp;·&nbsp; <span style="color: #f5a623;">₹${ride.fee}</span></p>
+        </div>
+        <div style="text-align: center; margin-bottom: 28px;">
+          <a href="${rideUrl}" style="display: inline-block; background: linear-gradient(135deg, #f5a623, #e8563d); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;">Register Now →</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #2a2a3a; margin: 0 0 20px;" />
+        <p style="color: #505060; font-size: 12px; text-align: center; margin: 0;">
+          You're receiving this because you're a registered member of Tales on 2 Wheels.<br/>
+          To manage notifications, visit your <a href="${BASE_URL}/profile" style="color: #f5a623;">profile settings</a>.
+        </p>
+      </div>
+      <div style="height: 6px; background: linear-gradient(90deg, #f5a623, #e8563d);"></div>
+    </div>
+  `;
+}
+
+export async function sendRideReminderEmails(
+  rideId: string,
+  ride: RideEmailPayload,
+  notifyMode: NotifyMode
+): Promise<void> {
+  // Exclude users who have already registered (non-rejected)
+  const registeredUserIds = new Set(
+    (await prisma.rideRegistration.findMany({
+      where: { rideId, approvalStatus: { not: "rejected" } },
+      select: { userId: true },
+    })).map((r) => r.userId)
+  );
+
+  const userWhere: Record<string, unknown> = {
+    isApproved: true,
+    email: { not: "" },
+    id: { notIn: Array.from(registeredUserIds) },
+  };
+  if (notifyMode === "selected") userWhere.notifyRides = true;
+
+  const users = await prisma.user.findMany({
+    where: userWhere,
+    select: { email: true, name: true },
+  });
+
+  const profileWhere: Record<string, unknown> = { mergedIntoId: null, email: { not: "" } };
+  if (notifyMode === "selected") profileWhere.notifyRides = true;
+  const profiles = await prisma.riderProfile.findMany({
+    where: profileWhere,
+    select: { email: true, name: true },
+  });
+  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+  const unlinkedRecipients = profiles.filter((p) => !userEmails.has(p.email.toLowerCase()));
+
+  const allRecipients = [...users, ...unlinkedRecipients];
+  console.log(
+    `[T2W] Ride reminder: mode=${notifyMode}, users=${users.length}, unlinked=${unlinkedRecipients.length}, total=${allRecipients.length}`
+  );
+  if (allRecipients.length === 0) {
+    console.warn("[T2W] Ride reminder: 0 recipients — no emails sent");
+    return;
+  }
+
+  const san = (s: string) => s.replace(/[\r\n]/g, " ");
+  const subject = `Reminder: Register for ${san(ride.title)} — ${san(ride.startLocation)} → ${san(ride.endLocation)}`;
+  const html = rideReminderHtml(ride);
+
+  const CONCURRENCY = 5;
+  const failures: { to: string; reason: unknown }[] = [];
+  let sent = 0;
+  for (let i = 0; i < allRecipients.length; i += CONCURRENCY) {
+    const slice = allRecipients.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(slice.map((u) => sendEmail(u.email, subject, html)));
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") failures.push({ to: slice[idx].email, reason: r.reason });
+      else sent += 1;
+    });
+  }
+  if (failures.length) {
+    for (const f of failures) console.error(`[T2W] Reminder email failed (to=${f.to}):`, f.reason);
+  }
+  console.log(`[T2W] Ride reminder complete: ${sent} sent, ${failures.length} failed`);
 }

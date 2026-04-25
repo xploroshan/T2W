@@ -42,6 +42,7 @@ import {
   ClipboardList,
   Award,
   Trophy,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
@@ -270,6 +271,10 @@ export function AdminPage() {
   const [editRideUpiIds, setEditRideUpiIds] = useState<{ label: string; id: string }[]>([{ label: "", id: "" }]);
   const [editRideRegSchedule, setEditRideRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
 
+  // Reminder email state
+  const [reminderMenuRideId, setReminderMenuRideId] = useState<string | null>(null);
+  const [sendingReminderRideId, setSendingReminderRideId] = useState<string | null>(null);
+
   // Registration management state
   const [managingRegsRideId, setManagingRegsRideId] = useState<string | null>(null);
   const [rideRegistrations, setRideRegistrations] = useState<Array<{
@@ -473,6 +478,19 @@ export function AdminPage() {
     }
   };
 
+  const sendRideReminder = async (rideId: string, notifyMode: "all" | "selected") => {
+    setSendingReminderRideId(rideId);
+    setReminderMenuRideId(null);
+    try {
+      await api.rides.notifyReminder(rideId, notifyMode);
+      alert(`Reminder emails queued (${notifyMode === "all" ? "Notify All" : "Notify Selected"}).`);
+    } catch {
+      alert("Failed to queue reminder emails. Please try again.");
+    } finally {
+      setSendingReminderRideId(null);
+    }
+  };
+
   const confirmDeleteRide = (ride: AdminRide) => {
     setDeleteConfirm({ type: "ride", id: ride.id, name: ride.title });
   };
@@ -565,6 +583,14 @@ export function AdminPage() {
       console.error("Failed to load ride:", err);
     }
   };
+
+  // Close reminder dropdown when clicking outside
+  useEffect(() => {
+    if (!reminderMenuRideId) return;
+    const handleClickOutside = () => setReminderMenuRideId(null);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [reminderMenuRideId]);
 
   // Click-outside handler for rider search dropdown
   useEffect(() => {
@@ -1656,7 +1682,13 @@ export function AdminPage() {
                         </button>
                       ))}
                     </div>
-                    {rideFormNotifyMode === "selected" && (
+                    {rideFormNotifyMode !== "none" && rideFormRegSchedule.enabled && (
+                      <p className="mt-2 text-xs text-blue-400/80">
+                        Emails will be sent to each tier when their registration window opens, not immediately.
+                        {rideFormNotifyMode === "selected" && " Only members with Notifications ON will be included."}
+                      </p>
+                    )}
+                    {rideFormNotifyMode === "selected" && !rideFormRegSchedule.enabled && (
                       <p className="mt-2 text-xs text-yellow-400/80">Only users with the Notifications toggle ON (in the Users tab) will receive this email.</p>
                     )}
                   </div>
@@ -1727,6 +1759,42 @@ export function AdminPage() {
                         <button onClick={() => api.exportRideRegistrations(ride.id, ride.title)} className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs text-green-400 transition-colors hover:bg-green-400/20">
                           <Download className="h-3.5 w-3.5" />Export
                         </button>
+                      )}
+                      {isCoreOrAbove && (
+                        <div className="relative">
+                          <button
+                            onClick={() => setReminderMenuRideId(reminderMenuRideId === ride.id ? null : ride.id)}
+                            disabled={sendingReminderRideId === ride.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-purple-400/10 px-3 py-2 text-xs text-purple-400 transition-colors hover:bg-purple-400/20 disabled:opacity-50"
+                            title="Send registration reminder email"
+                          >
+                            {sendingReminderRideId === ride.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Bell className="h-3.5 w-3.5" />}
+                            Remind
+                          </button>
+                          {reminderMenuRideId === ride.id && (
+                            <div className="absolute right-0 top-full mt-1 z-20 min-w-[160px] rounded-lg border border-t2w-border bg-t2w-surface shadow-xl">
+                              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-t2w-muted">Send Reminder</p>
+                              <button
+                                onClick={() => sendRideReminder(ride.id, "all")}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-white hover:bg-t2w-surface-light"
+                              >
+                                <Bell className="h-3 w-3 text-purple-400" />
+                                Notify All
+                                <span className="ml-auto text-[10px] text-t2w-muted">Everyone</span>
+                              </button>
+                              <button
+                                onClick={() => sendRideReminder(ride.id, "selected")}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-white hover:bg-t2w-surface-light"
+                              >
+                                <Bell className="h-3 w-3 text-yellow-400" />
+                                Notify Selected
+                                <span className="ml-auto text-[10px] text-t2w-muted">Notif. ON</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                       {isSuperAdmin && (
                         <button onClick={() => editingRideId === ride.id ? setEditingRideId(null) : startEditRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-t2w-accent/10 px-3 py-2 text-xs text-t2w-accent transition-colors hover:bg-t2w-accent/20">

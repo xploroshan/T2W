@@ -152,31 +152,45 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Schedule email notifications to run after the response is sent.
-    // after() is guaranteed by Vercel to complete even after the HTTP response
-    // returns — unlike plain fire-and-forget which is killed with the lambda.
     const notifyMode = (data.notifyMode as "all" | "none" | "selected") ?? "all";
+    const ridePayload = {
+      id: ride.id,
+      rideNumber: ride.rideNumber,
+      title: ride.title,
+      startLocation: ride.startLocation,
+      endLocation: ride.endLocation,
+      startDate: ride.startDate,
+      endDate: ride.endDate,
+      distanceKm: ride.distanceKm,
+      description: ride.description,
+      posterUrl: ride.posterUrl,
+      fee: ride.fee,
+      leadRider: ride.leadRider,
+    };
+
+    // after() is guaranteed by Vercel to run to completion after the response returns.
     after(async () => {
       try {
-        await sendRideAnnouncementEmails(
-          {
-            id: ride.id,
-            rideNumber: ride.rideNumber,
-            title: ride.title,
-            startLocation: ride.startLocation,
-            endLocation: ride.endLocation,
-            startDate: ride.startDate,
-            endDate: ride.endDate,
-            distanceKm: ride.distanceKm,
-            description: ride.description,
-            posterUrl: ride.posterUrl,
-            fee: ride.fee,
-            leadRider: ride.leadRider,
-          },
-          notifyMode
-        );
+        if (notifyMode === "none") return;
+        const hasStaggered = !!(ride.regOpenCore || ride.regOpenT2w || ride.regOpenRider);
+        if (hasStaggered) {
+          // Create one scheduled-email job per tier at their respective open times.
+          // Riders/guests fall back to the T2W time if no separate time is set.
+          const jobs: { rideId: string; tier: string; notifyMode: string; scheduledAt: Date }[] = [];
+          if (ride.regOpenCore) jobs.push({ rideId: ride.id, tier: "core", notifyMode, scheduledAt: ride.regOpenCore });
+          if (ride.regOpenT2w) jobs.push({ rideId: ride.id, tier: "t2w", notifyMode, scheduledAt: ride.regOpenT2w });
+          const riderTime = ride.regOpenRider ?? ride.regOpenT2w;
+          if (riderTime) jobs.push({ rideId: ride.id, tier: "rider_guest", notifyMode, scheduledAt: riderTime });
+          if (jobs.length > 0) {
+            await prisma.scheduledEmail.createMany({ data: jobs });
+            console.log(`[T2W] Scheduled ${jobs.length} tier email job(s) for ride ${ride.id}`);
+          }
+        } else {
+          // No staggered schedule — send an immediate announcement to all / selected.
+          await sendRideAnnouncementEmails(ridePayload, notifyMode);
+        }
       } catch (err) {
-        console.error("[T2W] Ride announcement email error:", err);
+        console.error("[T2W] Ride email setup error:", err);
       }
     });
 
