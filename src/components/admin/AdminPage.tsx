@@ -1660,8 +1660,8 @@ export function AdminPage() {
                     <p className="text-xs text-t2w-muted mb-3">Choose who receives an email announcement when this ride is published.</p>
                     <div className="flex flex-wrap gap-2">
                       {([
-                        { value: "all", label: "Notify All", desc: "All members with an email address" },
-                        { value: "selected", label: "Notify Selected", desc: "Only members with notifications enabled" },
+                        { value: "all", label: "Notify All", desc: "All members with notifications enabled" },
+                        { value: "selected", label: "Notify Selected", desc: "Members in the admin's selected notification group" },
                         { value: "none", label: "No Notification", desc: "Skip email entirely" },
                       ] as const).map((opt) => (
                         <button
