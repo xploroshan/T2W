@@ -190,6 +190,15 @@ export const api = {
       if (!res.ok) throw new Error("Failed to delete ride");
       return res.json();
     },
+    notifyReminder: async (id: string, notifyMode: "all" | "selected") => {
+      const res = await fetch(`/api/rides/${id}/notify-reminder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyMode }),
+      });
+      if (!res.ok) throw new Error("Failed to send reminder");
+      return res.json();
+    },
     register: async (id: string, data?: Record<string, unknown>) => {
       const res = await fetch(`/api/rides/${id}/register`, {
         method: "POST",

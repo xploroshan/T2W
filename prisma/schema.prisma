@@ -171,6 +171,7 @@ model Ride {
   participations   RideParticipation[]
   liveSession      LiveRideSession?
   ridePosts        RidePost[]
+  scheduledEmails  ScheduledEmail[]
 
   @@index([status])
   @@index([startDate])
@@ -369,4 +370,21 @@ model SiteSettings {
   key   String @unique  // e.g. "reg_form_settings", "about_content"
   value String @db.Text // JSON value
   updatedAt DateTime @updatedAt
+}
+
+// One row per registration-tier email to be sent at a scheduled time.
+// Created at ride-publish time when staggered registration is enabled;
+// consumed by the /api/cron/send-scheduled-emails endpoint.
+model ScheduledEmail {
+  id          String    @id @default(cuid())
+  rideId      String
+  tier        String    // "core" | "t2w" | "rider_guest"
+  notifyMode  String    // "all" | "selected"
+  scheduledAt DateTime
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  ride        Ride      @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledAt, sentAt])
 }
