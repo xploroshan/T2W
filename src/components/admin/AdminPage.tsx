@@ -54,16 +54,7 @@ import type { UserRole } from "@/types";
 
 type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity" | "arena" | "permissions";
 
-type PendingUser = {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string | null;
-  city?: string | null;
-  ridingExperience?: string | null;
-  motorcycles: Array<{ make: string; model: string }>;
-  createdAt: string;
-};
+type PendingUser = AllUser;
 
 type AllUser = {
   id: string;
@@ -72,6 +63,9 @@ type AllUser = {
   role: string;
   isApproved: boolean;
   joinDate: string;
+  phone?: string | null;
+  city?: string | null;
+  ridingExperience?: string | null;
   notifyRides?: boolean;
   adminNotifySelected?: boolean;
   hasAccount?: boolean;
@@ -330,17 +324,20 @@ export function AdminPage() {
 
     Promise.all([
       api.admin.stats().catch(() => null),
-      api.users.list("status=pending").catch(() => null),
-      api.users.list("status=active").catch(() => null),
+      api.users.list().catch(() => null),
       api.rides.list().catch(() => null),
       api.admin.content.list().catch(() => null),
       api.blogs.listPending().catch(() => null),
       api.ridePosts.listPending().catch(() => null),
     ])
-      .then(([statsData, pendingData, usersData, ridesData, contentData, blogsData, postsData]) => {
+      .then(([statsData, usersData, ridesData, contentData, blogsData, postsData]) => {
         if (statsData) setStats((statsData as { stats: AdminStats }).stats);
-        if (pendingData) setPendingUsers((pendingData as { users: PendingUser[] }).users);
-        if (usersData) setAllUsers((usersData as { users: AllUser[] }).users);
+        if (usersData) {
+          const allUsersResult = (usersData as { users: AllUser[] }).users;
+          setAllUsers(allUsersResult);
+          // Pending users are those with a real account (hasAccount) not yet approved
+          setPendingUsers(allUsersResult.filter((u) => u.hasAccount && !u.isApproved));
+        }
         if (ridesData) setRides((ridesData as { rides: AdminRide[] }).rides);
         if (contentData) setContent((contentData as { content: ContentItem[] }).content);
         if (blogsData) setPendingBlogs((blogsData as { blogs: PendingBlog[] }).blogs);

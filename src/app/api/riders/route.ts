@@ -52,6 +52,10 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         participations: {
+          where: {
+            droppedOut: false,
+            ...(cutoff ? { ride: { startDate: { gte: cutoff } } } : {}),
+          },
           include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true, type: true } } },
         },
         linkedUsers: {
@@ -63,11 +67,8 @@ export async function GET(req: NextRequest) {
     });
 
     const riders = profiles.map((p: typeof profiles[number]) => {
-      // Exclude dropped-out riders from active stats, and filter by period
-      const activeParticipations = p.participations.filter(
-        (pp: typeof p.participations[number]) =>
-          !pp.droppedOut && (!cutoff || pp.ride.startDate >= cutoff)
-      );
+      // droppedOut and period already filtered by the DB query above
+      const activeParticipations = p.participations;
       return {
         id: p.id,
         name: p.name,
@@ -107,7 +108,12 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ riders });
+    // Cache public (non-privileged) leaderboard responses for 60 s.
+    // Privileged responses include PII and must not be shared across users.
+    const cacheHeaders = isPrivileged
+      ? undefined
+      : { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } };
+    return NextResponse.json({ riders }, cacheHeaders);
   } catch (error) {
     console.error("[T2W] List riders error:", error);
     return NextResponse.json({ error: "Failed to load riders" }, { status: 500 });

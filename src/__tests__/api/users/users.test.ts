@@ -11,6 +11,7 @@ vi.mock('@/lib/db', () => ({
     riderProfile: {
       findMany: vi.fn(),
     },
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -27,11 +28,13 @@ const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockFindMany = prisma.user.findMany as ReturnType<typeof vi.fn>;
 const mockFindUnique = prisma.user.findUnique as ReturnType<typeof vi.fn>;
 const mockCreate = prisma.user.create as ReturnType<typeof vi.fn>;
-const mockRiderFindMany = prisma.riderProfile.findMany as ReturnType<typeof vi.fn>;
+const mockQueryRaw = prisma.$queryRaw as ReturnType<typeof vi.fn>;
 
 describe('GET /api/users', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // $queryRaw replaces riderProfile.findMany for the unlinked-riders query
+    mockQueryRaw.mockResolvedValue([]);
   });
 
   it('returns 403 for unauthenticated users', async () => {
@@ -60,7 +63,6 @@ describe('GET /api/users', () => {
       { id: '1', name: 'User One', email: 'one@test.com', role: 'rider', isApproved: true, joinDate: new Date('2024-06-01'), createdAt: new Date('2024-06-01'), linkedRiderId: null, phone: null, city: null, ridingExperience: null },
     ];
     mockFindMany.mockResolvedValue(users);
-    mockRiderFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/users');
     const { status, data } = await parseResponse(await GET(req));
@@ -73,7 +75,6 @@ describe('GET /api/users', () => {
   it('returns user list for core_member', async () => {
     mockGetCurrentUser.mockResolvedValue(mockCoreMember);
     mockFindMany.mockResolvedValue([]);
-    mockRiderFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/users');
     const { status, data } = await parseResponse(await GET(req));
@@ -94,6 +95,21 @@ describe('GET /api/users', () => {
         where: { isApproved: false },
       })
     );
+  });
+
+  it('includes unlinked rider profiles in full listing', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockFindMany.mockResolvedValue([]);
+    const unlinkedRider = { id: 'rp-1', name: 'Unlinked Rider', email: 'unlinked@test.com', role: 'rider', joinDate: new Date('2024-06-01'), phone: '', notifyRides: true };
+    mockQueryRaw.mockResolvedValue([unlinkedRider]);
+
+    const req = createNextRequest('http://localhost:3000/api/users');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    const unlinked = data.users.find((u: { id: string }) => u.id === 'rp-1');
+    expect(unlinked).toBeDefined();
+    expect(unlinked.hasAccount).toBe(false);
   });
 });
 

@@ -140,30 +140,25 @@ describe('GET /api/riders', () => {
   });
 
   it('excludes dropped-out participations from stats', async () => {
-    const profileWithDropout = {
-      ...mockProfile,
-      participations: [
-        ...mockProfile.participations,
-        {
-          droppedOut: true,
-          points: 5,
-          ride: {
-            id: 'ride-2',
-            rideNumber: '#002',
-            title: 'Dropped Ride',
-            startDate: new Date('2024-08-01'),
-            distanceKm: 200,
-          },
-        },
-      ],
-    };
-    mockProfileFindMany.mockResolvedValue([profileWithDropout]);
+    // The DB WHERE clause filters droppedOut rows before returning — mock reflects that.
+    mockProfileFindMany.mockResolvedValue([mockProfile]); // mockProfile only has droppedOut:false
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { data } = await parseResponse(await GET(req));
 
     expect(data.riders[0].ridesCompleted).toBe(1);
     expect(data.riders[0].totalKm).toBe(150);
+
+    // Confirm the filter is pushed to the DB query (not done client-side)
+    expect(mockProfileFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          participations: expect.objectContaining({
+            where: expect.objectContaining({ droppedOut: false }),
+          }),
+        }),
+      })
+    );
   });
 
   it('returns cached ride role stats (pilot, sweep, organized) from profile', async () => {

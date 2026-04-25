@@ -70,6 +70,7 @@ model RiderProfile {
 
   @@index([email])
   @@index([mergedIntoId])
+  @@index([name])
 }
 
 // Tracks which riders participated in which rides with points
@@ -245,6 +246,9 @@ model Notification {
   userId  String?
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
 }
 
 model Otp {
@@ -314,6 +318,8 @@ model LiveRideBreak {
   reason    String?
 
   session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
 
 model Content {

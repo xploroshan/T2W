@@ -26,9 +26,13 @@ export async function GET(req: NextRequest) {
       where: { key },
     });
 
-    return NextResponse.json({
-      value: setting ? JSON.parse(setting.value) : null,
-    });
+    const isPublic = PUBLIC_KEYS.has(key);
+    return NextResponse.json(
+      { value: setting ? JSON.parse(setting.value) : null },
+      isPublic
+        ? { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } }
+        : undefined
+    );
   } catch (error) {
     console.error("[T2W] Site settings GET error:", error);
     return NextResponse.json(
