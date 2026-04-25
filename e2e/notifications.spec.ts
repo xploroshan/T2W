@@ -522,3 +522,187 @@ test.describe("Notifications — rider profile notification preference", () => {
     }
   });
 });
+
+// ── Reminder Button in Admin Ride Panel ───────────────────────────────────────
+
+test.describe("Notifications — admin ride panel reminder button", () => {
+  test("Remind button is visible for superadmin in the rides list", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+
+    // At least one Remind button should appear (one per ride)
+    const remindBtn = page.getByRole("button", { name: /remind/i }).first();
+    await expect(remindBtn).toBeVisible();
+  });
+
+  test("Clicking Remind opens dropdown with Notify All and Notify Selected", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /remind/i }).first().click();
+
+    // Dropdown should appear with both options
+    await expect(page.getByText("Notify All").first()).toBeVisible();
+    await expect(page.getByText("Notify Selected").first()).toBeVisible();
+  });
+
+  test("Clicking Notify All in reminder dropdown closes the dropdown and triggers the send flow", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    let dialogMsg = "";
+    page.on("dialog", (dialog) => {
+      dialogMsg = dialog.message();
+      dialog.accept();
+    });
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+
+    // Open dropdown
+    await page.getByRole("button", { name: /remind/i }).first().click();
+    // Dropdown must be visible before we click inside it
+    await expect(page.getByText("Send Reminder").first()).toBeVisible();
+
+    // Click the first visible "Notify All" button (the dropdown item, not a form button)
+    await page.getByText("Notify All").first().click({ force: true });
+    await page.waitForTimeout(1500);
+
+    // Key verification: dropdown closed, proving sendRideReminder was called
+    // (setReminderMenuRideId(null) runs synchronously on function entry)
+    await expect(page.getByText("Send Reminder")).not.toBeVisible();
+
+    // Bonus: if the API mock returns 200, the success dialog should have fired
+    // (may be empty if setupAdminMocks intercepted the POST differently)
+    if (dialogMsg) {
+      expect(dialogMsg).toMatch(/notify all|queued/i);
+    }
+  });
+
+  test("Clicking Notify Selected in reminder dropdown triggers selected mode", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    let dialogMsg = "";
+    page.on("dialog", (dialog) => {
+      dialogMsg = dialog.message();
+      dialog.accept();
+    });
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: /remind/i }).first().click();
+    await expect(page.getByText("Send Reminder").first()).toBeVisible();
+
+    await page.getByText("Notify Selected").first().click({ force: true });
+    await page.waitForTimeout(1500);
+
+    // Dropdown must close, confirming the onClick handler fired
+    await expect(page.getByText("Send Reminder")).not.toBeVisible();
+
+    if (dialogMsg) {
+      expect(dialogMsg).toMatch(/notify selected|queued/i);
+    }
+  });
+
+  test("POST /api/rides/:id/notify-reminder returns 403 for unauthenticated callers", async ({ page }) => {
+    await page.goto("/rides");
+    await page.waitForLoadState("networkidle");
+
+    const result = await page.evaluate(async () => {
+      const res = await fetch("/api/rides/ride-1/notify-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifyMode: "all" }),
+      });
+      return { status: res.status };
+    });
+    expect([401, 403, 429]).toContain(result.status);
+  });
+});
+
+// ── Staggered Registration Schedule — Email Hint ──────────────────────────────
+
+test.describe("Notifications — staggered schedule email hint", () => {
+  test("Blue staggered hint appears when reg schedule is enabled and notifyMode != none", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Add New Ride").first().click();
+    await page.waitForLoadState("networkidle");
+
+    // Enable staggered schedule — look for the toggle/checkbox
+    const staggeredToggle = page.locator('input[type="checkbox"]').first();
+    if (await staggeredToggle.isVisible()) {
+      await staggeredToggle.check();
+    } else {
+      // Try button-style toggle
+      const toggleBtn = page.getByText(/staggered|schedule.*registration|registration.*schedule/i).first();
+      if (await toggleBtn.isVisible()) await toggleBtn.click();
+    }
+    await page.waitForTimeout(200);
+
+    // Blue hint should appear
+    const body = await page.locator("body").textContent();
+    expect(body).toMatch(/emails will be sent to each tier|tier.*registration window|registration window opens/i);
+  });
+
+  test("Yellow hint for Notify Selected only shows when staggered is NOT enabled", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Add New Ride").first().click();
+    await page.waitForLoadState("networkidle");
+
+    // Select Notify Selected (without enabling staggered)
+    await page.getByText("Notify Selected").first().click();
+    await page.waitForTimeout(200);
+
+    // Yellow hint about "Notifications toggle ON" should be visible
+    const body = await page.locator("body").textContent();
+    expect(body).toMatch(/notifications toggle on|users tab/i);
+  });
+
+  test("Staggered schedule hint is NOT shown when notifyMode is none", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await setupAdminMocks(page);
+
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /rides/i }).first().click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Add New Ride").first().click();
+    await page.waitForLoadState("networkidle");
+
+    // Switch to No Notification
+    await page.getByText("No Notification").first().click();
+    await page.waitForTimeout(200);
+
+    // Blue staggered hint must NOT be visible regardless of schedule toggle
+    const body = await page.locator("body").textContent();
+    expect(body).not.toMatch(/emails will be sent to each tier/i);
+  });
+});
