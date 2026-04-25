@@ -12,7 +12,18 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status"); // upcoming | completed | all
     const limit = parseInt(searchParams.get("limit") || "0") || 0;
 
+    // For stable statuses that are stored as-is in the DB, filter at the query level.
+    // "upcoming" is excluded from the DB-level filter because computeRideStatus may
+    // auto-advance it to "ongoing" or "completed" based on dates — the app-layer filter
+    // below handles that. "cancelled", "completed", and "ongoing" are admin overrides
+    // and are always returned exactly as stored.
+    const dbWhereStatus: Record<string, unknown> = {};
+    if (status === "cancelled" || status === "completed" || status === "ongoing") {
+      dbWhereStatus.status = status;
+    }
+
     const rides = await prisma.ride.findMany({
+      where: Object.keys(dbWhereStatus).length ? dbWhereStatus : undefined,
       include: {
         participations: {
           select: { riderProfileId: true, droppedOut: true },

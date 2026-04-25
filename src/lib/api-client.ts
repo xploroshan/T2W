@@ -984,8 +984,11 @@ export const api = {
 
   // ── Live Ride Session ──
   liveSession: {
-    get: async (rideId: string) => {
-      const res = await fetch(`/api/rides/${rideId}/live`);
+    get: async (rideId: string, since?: string) => {
+      const url = since
+        ? `/api/rides/${rideId}/live?since=${encodeURIComponent(since)}`
+        : `/api/rides/${rideId}/live`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch live session");
       return res.json();
     },

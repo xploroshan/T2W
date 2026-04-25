@@ -4,8 +4,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { safeJsonParse } from "@/lib/json-utils";
 
 // GET /api/rides/[id]/live - fetch live session state + rider locations
+// ?since=<ISO timestamp>  — when provided, leadPath only includes points recorded
+//   after that timestamp (delta mode). The client appends to its existing path.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -15,6 +17,8 @@ export async function GET(
     }
 
     const { id: rideId } = await params;
+    const sinceParam = req.nextUrl.searchParams.get("since");
+    const sinceDate = sinceParam ? new Date(sinceParam) : null;
 
     const session = await prisma.liveRideSession.findUnique({
       where: { rideId },
@@ -72,25 +76,44 @@ export async function GET(
       };
     });
 
-    // Get lead rider's recent path for route painting.
-    // Cap at the last 2000 points (~2.8h at 5s cadence) to keep responses
-    // and map polylines fast on multi-day rides.
+    // Get lead rider's path for route painting.
+    // Delta mode (?since=): only return points newer than the given timestamp so
+    // the client can append instead of re-fetching the full history each poll.
+    // Full mode (no ?since): cap at the last 2000 points to bound response size.
     let leadPath: { lat: number; lng: number; recordedAt: string }[] = [];
     if (session.leadRiderId) {
-      const leadLocations = await prisma.liveRideLocation.findMany({
-        where: { sessionId: session.id, userId: session.leadRiderId },
-        orderBy: { recordedAt: "desc" },
-        take: 2000,
-        select: { lat: true, lng: true, recordedAt: true },
-      });
-      // Reverse to chronological order for polyline rendering
-      leadPath = leadLocations
-        .reverse()
-        .map((l) => ({
+      if (sinceDate) {
+        // Delta: only new points since the client's last known timestamp
+        const newPoints = await prisma.liveRideLocation.findMany({
+          where: {
+            sessionId: session.id,
+            userId: session.leadRiderId,
+            recordedAt: { gt: sinceDate },
+          },
+          orderBy: { recordedAt: "asc" },
+          select: { lat: true, lng: true, recordedAt: true },
+        });
+        leadPath = newPoints.map((l) => ({
           lat: l.lat,
           lng: l.lng,
           recordedAt: l.recordedAt.toISOString(),
         }));
+      } else {
+        // Full: return up to the last 2000 points in chronological order
+        const leadLocations = await prisma.liveRideLocation.findMany({
+          where: { sessionId: session.id, userId: session.leadRiderId },
+          orderBy: { recordedAt: "desc" },
+          take: 2000,
+          select: { lat: true, lng: true, recordedAt: true },
+        });
+        leadPath = leadLocations
+          .reverse()
+          .map((l) => ({
+            lat: l.lat,
+            lng: l.lng,
+            recordedAt: l.recordedAt.toISOString(),
+          }));
+      }
     }
 
     return NextResponse.json({

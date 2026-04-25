@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
-
 // GET /api/guidelines - Return all guidelines
 export async function GET() {
   try {
@@ -10,7 +8,9 @@ export async function GET() {
       orderBy: { id: "asc" },
     });
 
-    return NextResponse.json({ guidelines });
+    return NextResponse.json({ guidelines }, {
+      headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=1200" },
+    });
   } catch (error) {
     console.error("[T2W] List guidelines error:", error);
     return NextResponse.json(

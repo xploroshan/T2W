@@ -51,6 +51,8 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const locationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCoordsRef = useRef<{ lat: number; lng: number; speed: number | null; heading: number | null; accuracy: number | null } | null>(null);
   const sessionStatusRef = useRef<string | null>(null);
+  // Tracks the most recent leadPath point's timestamp for delta-fetch
+  const lastLeadPathTimestampRef = useRef<string | null>(null);
 
   const isAdmin = user?.role === "superadmin" || user?.role === "core_member";
 
@@ -86,13 +88,31 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     };
   }, []);
 
-  // Fetch session data (polling)
+  // Fetch session data (polling).
+  // After the first full load, passes ?since= so only new leadPath points are
+  // returned — the client appends them instead of re-fetching the full path.
   const fetchSession = useCallback(async () => {
     try {
-      const data = await api.liveSession.get(rideId);
+      const since = lastLeadPathTimestampRef.current;
+      const data = await api.liveSession.get(rideId, since ?? undefined);
       setSession(data.session);
       setRiders(data.riders || []);
-      setLeadPath(data.leadPath || []);
+      const newPoints: { lat: number; lng: number; recordedAt?: string }[] = data.leadPath || [];
+      if (since && newPoints.length > 0) {
+        // Delta mode: append only new points
+        setLeadPath((prev) => [
+          ...prev,
+          ...newPoints.map(({ lat, lng }) => ({ lat, lng })),
+        ]);
+      } else {
+        // Full mode (first load or session restart)
+        setLeadPath(newPoints.map(({ lat, lng }) => ({ lat, lng })));
+      }
+      // Advance the cursor to the newest received point
+      if (newPoints.length > 0) {
+        const newest = newPoints[newPoints.length - 1];
+        if (newest.recordedAt) lastLeadPathTimestampRef.current = newest.recordedAt;
+      }
       setError(null);
     } catch (err) {
       console.error("Failed to fetch session:", err);

@@ -55,28 +55,29 @@ export async function GET(req: NextRequest) {
     }));
 
     if (!status) {
-      // Include rider profiles that don't have a User account
-      const userLinkedIds = new Set(
-        users.filter((u) => u.linkedRiderId).map((u) => u.linkedRiderId!)
-      );
-      const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
-
-      const unlinkedRiders = await prisma.riderProfile.findMany({
-        where: {
-          mergedIntoId: null,
-          id: { notIn: [...userLinkedIds] },
-          email: { notIn: [...userEmails] },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          joinDate: true,
-          phone: true,
-          notifyRides: true,
-        },
-      });
+      // Include rider profiles that don't have a User account.
+      // Uses NOT EXISTS so the DB can use indexes regardless of how large the
+      // user table grows (avoids the sequential-scan NOT IN anti-pattern).
+      type UnlinkedRiderRow = {
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        joinDate: Date;
+        phone: string;
+        notifyRides: boolean;
+      };
+      const unlinkedRiders = await prisma.$queryRaw<UnlinkedRiderRow[]>`
+        SELECT rp.id, rp.name, rp.email, rp.role, rp."joinDate", rp.phone, rp."notifyRides"
+        FROM "RiderProfile" rp
+        WHERE rp."mergedIntoId" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM "User" u WHERE u."linkedRiderId" = rp.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM "User" u WHERE LOWER(u.email) = LOWER(rp.email)
+          )
+      `;
 
       combined = [
         ...combined,

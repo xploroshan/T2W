@@ -9,7 +9,9 @@ export async function GET() {
     const badges = await prisma.badge.findMany({
       orderBy: { minKm: "asc" },
     });
-    return NextResponse.json({ badges });
+    return NextResponse.json({ badges }, {
+      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
+    });
   } catch (error) {
     console.error("[T2W] List badges error:", error);
     return NextResponse.json({ error: "Failed to load badges" }, { status: 500 });
