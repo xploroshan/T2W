@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { computeRideStatus } from "@/lib/ride-status";
@@ -152,25 +152,33 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Fire-and-forget email notifications
+    // Schedule email notifications to run after the response is sent.
+    // after() is guaranteed by Vercel to complete even after the HTTP response
+    // returns — unlike plain fire-and-forget which is killed with the lambda.
     const notifyMode = (data.notifyMode as "all" | "none" | "selected") ?? "all";
-    sendRideAnnouncementEmails(
-      {
-        id: ride.id,
-        rideNumber: ride.rideNumber,
-        title: ride.title,
-        startLocation: ride.startLocation,
-        endLocation: ride.endLocation,
-        startDate: ride.startDate,
-        endDate: ride.endDate,
-        distanceKm: ride.distanceKm,
-        description: ride.description,
-        posterUrl: ride.posterUrl,
-        fee: ride.fee,
-        leadRider: ride.leadRider,
-      },
-      notifyMode
-    ).catch((err) => console.error("[T2W] Ride announcement email error:", err));
+    after(async () => {
+      try {
+        await sendRideAnnouncementEmails(
+          {
+            id: ride.id,
+            rideNumber: ride.rideNumber,
+            title: ride.title,
+            startLocation: ride.startLocation,
+            endLocation: ride.endLocation,
+            startDate: ride.startDate,
+            endDate: ride.endDate,
+            distanceKm: ride.distanceKm,
+            description: ride.description,
+            posterUrl: ride.posterUrl,
+            fee: ride.fee,
+            leadRider: ride.leadRider,
+          },
+          notifyMode
+        );
+      } catch (err) {
+        console.error("[T2W] Ride announcement email error:", err);
+      }
+    });
 
     return NextResponse.json({ ride: { ...ride, rideNumber } });
   } catch (error) {
