@@ -183,14 +183,16 @@ export async function sendRideAnnouncementEmails(
 ): Promise<void> {
   if (notifyMode === "none") return;
 
-  // "all"      → every approved member with an email, regardless of notifyRides preference
-  // "selected" → only members who have the notifications toggle ON (notifyRides: true)
+  // "all"      → every approved member who has not opted out (notifyRides: true)
+  // "selected" → opted-in members in the admin's curated group (adminNotifySelected: true)
+  // Both modes always respect notifyRides — a disabled notification is never overridden.
   const userWhere: Record<string, unknown> = {
     isApproved: true,
     email: { not: "" },
+    notifyRides: true,
   };
   if (notifyMode === "selected") {
-    userWhere.notifyRides = true;
+    userWhere.adminNotifySelected = true;
   }
 
   const users = await prisma.user.findMany({
@@ -198,25 +200,28 @@ export async function sendRideAnnouncementEmails(
     select: { email: true, name: true },
   });
 
-  // Unlinked rider profiles (imported records with no User account) use the
-  // same rule: "all" = everyone with email; "selected" = notifyRides: true only.
+  // Unlinked rider profiles (imported records with no User account) — same rules.
   const profileWhere: Record<string, unknown> = {
     mergedIntoId: null,
     email: { not: "" },
+    notifyRides: true,
   };
-  if (notifyMode === "selected") {
-    profileWhere.notifyRides = true;
-  }
 
   const unlinkedProfiles = await prisma.riderProfile.findMany({
     where: profileWhere,
     select: { email: true, name: true },
   });
 
-  // Deduplicate: skip profiles whose email is already covered by a User account
-  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+  // Deduplicate: skip profiles whose email is covered by ANY User account.
+  // This prevents a rider with a User account (even with notifyRides:false) from
+  // receiving a second copy via their unlinked RiderProfile.
+  const allUsers = await prisma.user.findMany({
+    where: { email: { not: "" } },
+    select: { email: true },
+  });
+  const allUserEmails = new Set(allUsers.map((u) => u.email.toLowerCase()));
   const unlinkedRecipients = unlinkedProfiles.filter(
-    (p) => !userEmails.has(p.email.toLowerCase())
+    (p) => !allUserEmails.has(p.email.toLowerCase())
   );
 
   const allRecipients = [...users, ...unlinkedRecipients];
@@ -292,9 +297,10 @@ export async function sendTierAnnouncementEmails(
   const userWhere: Record<string, unknown> = {
     isApproved: true,
     email: { not: "" },
+    notifyRides: true,
     ...roleFilter,
   };
-  if (notifyMode === "selected") userWhere.notifyRides = true;
+  if (notifyMode === "selected") userWhere.adminNotifySelected = true;
 
   const users = await prisma.user.findMany({
     where: userWhere,
@@ -310,8 +316,8 @@ export async function sendTierAnnouncementEmails(
     const profileWhere: Record<string, unknown> = {
       mergedIntoId: null,
       email: { not: "" },
+      notifyRides: true,
     };
-    if (notifyMode === "selected") profileWhere.notifyRides = true;
     const profiles = await prisma.riderProfile.findMany({
       where: profileWhere,
       select: { email: true, name: true },
@@ -424,23 +430,29 @@ export async function sendRideReminderEmails(
   const userWhere: Record<string, unknown> = {
     isApproved: true,
     email: { not: "" },
+    notifyRides: true,
     id: { notIn: Array.from(registeredUserIds) },
   };
-  if (notifyMode === "selected") userWhere.notifyRides = true;
+  if (notifyMode === "selected") userWhere.adminNotifySelected = true;
 
   const users = await prisma.user.findMany({
     where: userWhere,
     select: { email: true, name: true },
   });
 
-  const profileWhere: Record<string, unknown> = { mergedIntoId: null, email: { not: "" } };
-  if (notifyMode === "selected") profileWhere.notifyRides = true;
+  const profileWhere: Record<string, unknown> = { mergedIntoId: null, email: { not: "" }, notifyRides: true };
   const profiles = await prisma.riderProfile.findMany({
     where: profileWhere,
     select: { email: true, name: true },
   });
-  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
-  const unlinkedRecipients = profiles.filter((p) => !userEmails.has(p.email.toLowerCase()));
+  // Dedup profiles against ALL user emails so a user who opted out via their
+  // User account is never reached through their unlinked RiderProfile instead.
+  const allUsers = await prisma.user.findMany({
+    where: { email: { not: "" } },
+    select: { email: true },
+  });
+  const allUserEmails = new Set(allUsers.map((u) => u.email.toLowerCase()));
+  const unlinkedRecipients = profiles.filter((p) => !allUserEmails.has(p.email.toLowerCase()));
 
   const allRecipients = [...users, ...unlinkedRecipients];
   console.log(
