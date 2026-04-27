@@ -50,8 +50,12 @@ Built for the T2W brotherhood of 500+ riders based in Bangalore, Karnataka. From
 - GPS breadcrumb submission (lat, lng, speed, heading, accuracy) (`/api/rides/[id]/live/location`)
 - Planned-route storage on the session for off-route deviation detection
 - Break management — log start/end/reason for rest stops (`/api/rides/[id]/live/break`)
-- Aggregate session metrics — average speed, cumulative distance, active rider count (`/api/rides/[id]/live/metrics`)
+- Aggregate session metrics — distance, moving time, average / max speed, elevation gain/loss, breaks, wall-clock start/end (`/api/rides/[id]/live/metrics`)
 - Map view with current locations, headings, and break markers
+- Post-ride summary with toggle between **lead rider's route** (default) and **the viewing rider's own route**
+- Server-side path decimation so multi-hour rides keep their full polyline (no silent truncation of the oldest portion)
+- Background Google Elevation API backfill on End Ride (idempotent, runs in `after()` so it never blocks the response)
+- Shareable summary card — riders upload a photo, pick up to 4 stats, and download a 1080×1920 PNG with T2W branding for WhatsApp / Instagram / Facebook (uses Web Share API on mobile when available)
 - Service Worker registration for offline-friendly location queueing (`src/components/ServiceWorkerRegistrar.tsx`, `src/lib/location-queue.ts`)
 
 ### Rider Profiles & Leaderboard
@@ -313,6 +317,11 @@ SMTP_FROM="Tales on 2 Wheels"
 # Enable "Maps JavaScript API" in Google Cloud Console, restrict the key by
 # HTTP referrer to your production + preview domains, and enable billing.
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="AIza…"
+
+# Google Maps SERVER key — used only by the post-ride Elevation backfill.
+# Separate from the public key (referrers don't apply server-side). Restrict
+# by API to "Elevation API" only. If unset, the Elevation Gain stat is hidden.
+GOOGLE_MAPS_SERVER_API_KEY="AIza…"
 ```
 
 ---

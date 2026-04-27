@@ -209,12 +209,17 @@ export interface LiveRiderLocation {
 
 export interface LiveRideMetrics {
   elapsedMinutes: number;
+  movingMinutes: number;
   distanceKm: number;
   avgSpeedKmh: number;
   maxSpeedKmh: number;
   breakCount: number;
   breakMinutes: number;
   riderCount: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  elevationGainM: number | null;
+  elevationLossM: number | null;
 }
 
 export interface RideRegistration {

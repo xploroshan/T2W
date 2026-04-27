@@ -36,6 +36,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const [session, setSession] = useState<LiveRideSession | null>(null);
   const [riders, setRiders] = useState<LiveRiderLocation[]>([]);
   const [leadPath, setLeadPath] = useState<{ lat: number; lng: number }[]>([]);
+  const [myPath, setMyPath] = useState<{ lat: number; lng: number }[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -97,22 +98,32 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       const data = await api.liveSession.get(rideId, since ?? undefined);
       setSession(data.session);
       setRiders(data.riders || []);
-      const newPoints: { lat: number; lng: number; recordedAt?: string }[] = data.leadPath || [];
-      if (since && newPoints.length > 0) {
-        // Delta mode: append only new points
-        setLeadPath((prev) => [
-          ...prev,
-          ...newPoints.map(({ lat, lng }) => ({ lat, lng })),
-        ]);
+      const newLead: { lat: number; lng: number; recordedAt?: string }[] = data.leadPath || [];
+      const newMine: { lat: number; lng: number; recordedAt?: string }[] = data.myPath || [];
+      if (since) {
+        // Delta mode: append only new points to whichever paths grew.
+        if (newLead.length > 0) {
+          setLeadPath((prev) => [
+            ...prev,
+            ...newLead.map(({ lat, lng }) => ({ lat, lng })),
+          ]);
+        }
+        if (newMine.length > 0) {
+          setMyPath((prev) => [
+            ...prev,
+            ...newMine.map(({ lat, lng }) => ({ lat, lng })),
+          ]);
+        }
       } else {
-        // Full mode (first load or session restart)
-        setLeadPath(newPoints.map(({ lat, lng }) => ({ lat, lng })));
+        // Full mode (first load or session restart) — replace both paths.
+        setLeadPath(newLead.map(({ lat, lng }) => ({ lat, lng })));
+        setMyPath(newMine.map(({ lat, lng }) => ({ lat, lng })));
       }
-      // Advance the cursor to the newest received point
-      if (newPoints.length > 0) {
-        const newest = newPoints[newPoints.length - 1];
-        if (newest.recordedAt) lastLeadPathTimestampRef.current = newest.recordedAt;
-      }
+      // Advance the cursor to the newest point we've seen across either path.
+      const newest =
+        newLead[newLead.length - 1]?.recordedAt ??
+        newMine[newMine.length - 1]?.recordedAt;
+      if (newest) lastLeadPathTimestampRef.current = newest;
       setError(null);
     } catch (err) {
       console.error("Failed to fetch session:", err);
@@ -407,8 +418,10 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
         </button>
         <LiveRidePostView
           rideTitle={rideTitle || "Ride"}
+          riderName={user?.name || "Rider"}
           plannedRoute={session.plannedRoute}
           leadPath={leadPath}
+          myPath={myPath}
           riders={riders}
           metrics={metrics}
           mapsLoaded={mapsLoaded}

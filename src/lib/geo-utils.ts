@@ -78,3 +78,33 @@ export function pathDistanceKm(points: LatLng[]): number {
   }
   return total / 1000;
 }
+
+/**
+ * Reduce a path to at most `max` points, sampled evenly along cumulative
+ * distance. The first and last points are always preserved so the visible
+ * polyline still snaps to the rider's actual start/end. Use this instead of a
+ * naive `.slice(0, max)` (which drops the tail) or `take: max` ordered by
+ * recordedAt desc (which silently drops the OLDEST portion of the route).
+ */
+export function decimatePath<T extends LatLng>(points: T[], max: number): T[] {
+  if (max <= 2 || points.length <= max) return points;
+
+  // Cumulative distance to each point
+  const cum: number[] = [0];
+  for (let i = 1; i < points.length; i++) {
+    cum.push(cum[i - 1] + haversineDistance(points[i - 1], points[i]));
+  }
+  const total = cum[cum.length - 1];
+  if (total === 0) return [points[0], points[points.length - 1]];
+
+  const step = total / (max - 1);
+  const out: T[] = [points[0]];
+  let cursor = 1;
+  for (let i = 1; i < max - 1; i++) {
+    const target = step * i;
+    while (cursor < points.length - 1 && cum[cursor] < target) cursor++;
+    out.push(points[cursor]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
