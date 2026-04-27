@@ -1,13 +1,30 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import type { LiveRideMetrics as Metrics, LiveRiderLocation } from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
-import { Clock, Route, Gauge, Users, TrendingUp, Coffee, AlertTriangle } from "lucide-react";
+import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
+import {
+  Clock,
+  Route,
+  Gauge,
+  Users,
+  TrendingUp,
+  Coffee,
+  AlertTriangle,
+  Mountain,
+  Sunrise,
+  Sunset,
+  Timer,
+  Share2,
+} from "lucide-react";
 
 interface LiveRidePostViewProps {
   rideTitle: string;
+  riderName: string;
   plannedRoute?: { lat: number; lng: number }[];
   leadPath: { lat: number; lng: number }[];
+  myPath?: { lat: number; lng: number }[];
   riders: LiveRiderLocation[];
   metrics: Metrics | null;
   mapsLoaded?: boolean;
@@ -18,8 +35,10 @@ interface LiveRidePostViewProps {
 
 export function LiveRidePostView({
   rideTitle,
+  riderName,
   plannedRoute,
   leadPath,
+  myPath = [],
   riders,
   metrics,
   mapsLoaded = true,
@@ -27,20 +46,74 @@ export function LiveRidePostView({
   startLocation,
   endLocation,
 }: LiveRidePostViewProps) {
+  // Default the toggle to whichever path actually has data. Solo rides where
+  // leadRiderId never matched will land on "mine" automatically.
+  const initialView: "lead" | "mine" =
+    leadPath.length > 0 ? "lead" : myPath.length > 0 ? "mine" : "lead";
+  const [pathView, setPathView] = useState<"lead" | "mine">(initialView);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  useEffect(() => {
+    // Re-resolve the default if data arrives after first render.
+    if (leadPath.length === 0 && myPath.length > 0 && pathView === "lead") {
+      setPathView("mine");
+    }
+  }, [leadPath.length, myPath.length, pathView]);
+
+  const showToggle = leadPath.length > 0 && myPath.length > 0;
+  const leadDisabled = leadPath.length === 0;
+  const mineDisabled = myPath.length === 0;
+
+  const stats = useMemo(() => buildStats(metrics), [metrics]);
+
   return (
     <div className="space-y-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-        <div className="p-4 border-b dark:border-gray-700">
-          <h2 className="text-lg font-bold dark:text-white">{rideTitle} — Ride Summary</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Post-ride view showing the completed route
-          </p>
+        <div className="p-4 border-b dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold dark:text-white">{rideTitle} — Ride Summary</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Post-ride view showing the completed route
+            </p>
+          </div>
+          {showToggle && (
+            <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setPathView("lead")}
+                disabled={leadDisabled}
+                data-testid="path-toggle-lead"
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  pathView === "lead"
+                    ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                } ${leadDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                Lead&rsquo;s route
+              </button>
+              <button
+                type="button"
+                onClick={() => setPathView("mine")}
+                disabled={mineDisabled}
+                data-testid="path-toggle-mine"
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  pathView === "mine"
+                    ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                } ${mineDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                My route
+              </button>
+            </div>
+          )}
         </div>
         <div className="h-[400px] sm:h-[500px]">
           {mapsLoaded ? (
             <LiveRideMap
               plannedRoute={plannedRoute}
               leadPath={leadPath}
+              myPath={myPath}
+              pathView={pathView}
               riders={riders}
               startLocation={startLocation}
               endLocation={endLocation}
@@ -66,55 +139,143 @@ export function LiveRidePostView({
 
       {metrics && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-            Ride Statistics
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              Ride Statistics
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              data-testid="open-share-card"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-t2w-accent/10 px-3 py-1.5 text-xs font-medium text-t2w-accent hover:bg-t2w-accent/20 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Create shareable card
+            </button>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <StatCard
-              icon={Clock}
-              label="Duration"
-              value={formatDuration(metrics.elapsedMinutes)}
-              color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-            />
-            <StatCard
-              icon={Route}
-              label="Distance"
-              value={`${metrics.distanceKm} km`}
-              color="bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400"
-            />
-            <StatCard
-              icon={Gauge}
-              label="Avg Speed"
-              value={`${metrics.avgSpeedKmh} km/h`}
-              color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
-            />
-            <StatCard
-              icon={TrendingUp}
-              label="Max Speed"
-              value={`${metrics.maxSpeedKmh} km/h`}
-              color="bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-            />
-            <StatCard
-              icon={Users}
-              label="Riders Tracked"
-              value={String(metrics.riderCount)}
-              color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"
-            />
-            <StatCard
-              icon={Coffee}
-              label="Breaks"
-              value={
-                metrics.breakCount > 0
-                  ? `${metrics.breakCount} (${metrics.breakMinutes} min)`
-                  : "None"
-              }
-              color="bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400"
-            />
+            {stats.map((s) => (
+              <StatCard
+                key={s.key}
+                icon={s.icon}
+                label={s.label}
+                value={s.value}
+                color={s.color}
+              />
+            ))}
           </div>
         </div>
       )}
+
+      {shareOpen && metrics && (
+        <ShareableRideCard
+          rideTitle={rideTitle}
+          riderName={riderName}
+          metrics={metrics}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   );
+}
+
+interface StatItem {
+  key: ShareStatKey;
+  icon: typeof Clock;
+  label: string;
+  value: string;
+  color: string;
+}
+
+function buildStats(metrics: Metrics | null): StatItem[] {
+  if (!metrics) return [];
+  const out: StatItem[] = [
+    {
+      key: "distance",
+      icon: Route,
+      label: "Distance",
+      value: `${metrics.distanceKm} km`,
+      color: "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400",
+    },
+    {
+      key: "movingTime",
+      icon: Timer,
+      label: "Moving Time",
+      value: formatDuration(metrics.movingMinutes),
+      color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
+    },
+    {
+      key: "duration",
+      icon: Clock,
+      label: "Duration",
+      value: formatDuration(metrics.elapsedMinutes),
+      color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400",
+    },
+    {
+      key: "avgSpeed",
+      icon: Gauge,
+      label: "Avg Speed",
+      value: `${metrics.avgSpeedKmh} km/h`,
+      color: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400",
+    },
+    {
+      key: "maxSpeed",
+      icon: TrendingUp,
+      label: "Max Speed",
+      value: `${metrics.maxSpeedKmh} km/h`,
+      color: "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400",
+    },
+  ];
+
+  if (metrics.elevationGainM != null) {
+    out.push({
+      key: "elevation",
+      icon: Mountain,
+      label: "Elevation Gain",
+      value: `${metrics.elevationGainM} m`,
+      color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+    });
+  }
+
+  out.push({
+    key: "stops",
+    icon: Coffee,
+    label: "Stops",
+    value:
+      metrics.breakCount > 0
+        ? `${metrics.breakCount} (${metrics.breakMinutes} min)`
+        : "None",
+    color: "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
+  });
+
+  if (metrics.startedAt) {
+    out.push({
+      key: "startTime",
+      icon: Sunrise,
+      label: "Start",
+      value: formatTime(metrics.startedAt),
+      color: "bg-sky-50 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400",
+    });
+  }
+  if (metrics.endedAt) {
+    out.push({
+      key: "endTime",
+      icon: Sunset,
+      label: "End",
+      value: formatTime(metrics.endedAt),
+      color: "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400",
+    });
+  }
+
+  out.push({
+    key: "riders",
+    icon: Users,
+    label: "Riders Tracked",
+    value: String(metrics.riderCount),
+    color: "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400",
+  });
+
+  return out;
 }
 
 function StatCard({
@@ -142,4 +303,9 @@ function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

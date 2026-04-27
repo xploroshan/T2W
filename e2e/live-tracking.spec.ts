@@ -133,6 +133,7 @@ async function mockLiveApi(
           session,
           riders: session ? MOCK_RIDERS : [],
           leadPath: [],
+          myPath: [],
         }),
       });
     }
@@ -864,5 +865,83 @@ test.describe("Live API — mocked response shapes", () => {
       maxSpeedKmh: expect.any(Number),
       riderCount: expect.any(Number),
     });
+  });
+});
+
+// ── Group N: Post-ride view extras (path toggle + share card) ────────────────
+
+test.describe("Post-ride view — path toggle + share card", () => {
+  const ENDED_SESSION = {
+    ...MOCK_SESSION_LIVE,
+    status: "ended",
+    endedAt: new Date().toISOString(),
+  };
+  const PATH = [
+    { lat: 24.75, lng: 46.75, recordedAt: new Date().toISOString() },
+    { lat: 24.76, lng: 46.76, recordedAt: new Date().toISOString() },
+  ];
+
+  async function mockEndedRideWithBothPaths(page: Page) {
+    const liveBase = "/api/rides/" + RIDE_ID + "/live";
+    await page.route("**" + liveBase + "**", (route) => {
+      const url = route.request().url();
+      if (url.includes("/metrics")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...MOCK_METRICS,
+            movingMinutes: 55,
+            startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+            endedAt: new Date().toISOString(),
+            elevationGainM: 250,
+            elevationLossM: 230,
+          }),
+        });
+      }
+      if (
+        url.includes("/join") ||
+        url.includes("/location") ||
+        url.includes("/break")
+      ) {
+        return route.continue();
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          session: ENDED_SESSION,
+          riders: MOCK_RIDERS,
+          leadPath: PATH,
+          myPath: PATH,
+        }),
+      });
+    });
+  }
+
+  test("renders path toggle and shareable-card button after End Ride", async ({
+    page,
+  }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await mockGoogleMaps(page);
+    await mockEndedRideWithBothPaths(page);
+    await goToLivePage(page);
+
+    await expect(page.getByTestId("path-toggle-lead")).toBeVisible();
+    await expect(page.getByTestId("path-toggle-mine")).toBeVisible();
+    await expect(page.getByTestId("open-share-card")).toBeVisible();
+  });
+
+  test("opens the share card modal and renders the canvas", async ({ page }) => {
+    await mockAuthAs(page, USERS.superAdmin);
+    await mockGoogleMaps(page);
+    await mockEndedRideWithBothPaths(page);
+    await goToLivePage(page);
+
+    await page.getByTestId("open-share-card").click();
+    await expect(page.getByTestId("share-card-canvas")).toBeVisible();
+    // The download button starts disabled (no photo, no stats picked yet)
+    // unless the persisted defaults populated stats — assert it exists either way.
+    await expect(page.getByTestId("share-card-download")).toBeVisible();
   });
 });

@@ -274,17 +274,19 @@ model Guideline {
 }
 
 model LiveRideSession {
-  id            String    @id @default(cuid())
-  rideId        String    @unique
-  status        String    @default("waiting") // waiting | live | paused | ended
-  startedAt     DateTime?
-  endedAt       DateTime?
-  startedBy     String    // userId who started the session
-  leadRiderId   String?   // userId of lead rider
-  sweepRiderId  String?   // userId of sweep rider
-  plannedRoute  String?   // JSON: [{lat,lng},...] for deviation detection
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  rideId          String    @unique
+  status          String    @default("waiting") // waiting | live | paused | ended
+  startedAt       DateTime?
+  endedAt         DateTime?
+  startedBy       String    // userId who started the session
+  leadRiderId     String?   // userId of lead rider
+  sweepRiderId    String?   // userId of sweep rider
+  plannedRoute    String?   // JSON: [{lat,lng},...] for deviation detection
+  elevationGainM  Int?      // backfilled after end via Google Elevation API
+  elevationLossM  Int?      // backfilled after end via Google Elevation API
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   ride      Ride               @relation(fields: [rideId], references: [id], onDelete: Cascade)
   locations LiveRideLocation[]

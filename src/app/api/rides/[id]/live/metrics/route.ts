@@ -72,16 +72,24 @@ export async function GET(
     const distanceKm = session.leadRiderId
       ? Math.round(pathDistanceKm(leadPoints) * 10) / 10
       : 0;
-    const riderCount = riderCountRows;
+
+    // Moving Time excludes break time. Clamped at 0 in case of clock skew or
+    // a paused-then-ended session where break minutes briefly exceed elapsed.
+    const movingMinutes = Math.max(0, elapsedMinutes - breakMinutes);
 
     return NextResponse.json({
       elapsedMinutes,
+      movingMinutes,
       distanceKm,
       avgSpeedKmh: Math.round((speedStats._avg.speed || 0) * 10) / 10,
       maxSpeedKmh: Math.round((speedStats._max.speed || 0) * 10) / 10,
       breakCount: closedBreakCount,
       breakMinutes,
       riderCount: riderCountRows.length,
+      startedAt: session.startedAt?.toISOString() ?? null,
+      endedAt: session.endedAt?.toISOString() ?? null,
+      elevationGainM: session.elevationGainM,
+      elevationLossM: session.elevationLossM,
     });
   } catch (error) {
     console.error("[T2W] Metrics error:", error);

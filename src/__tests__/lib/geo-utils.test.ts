@@ -4,6 +4,7 @@ import {
   pointToSegmentDistance,
   isOnRoute,
   pathDistanceKm,
+  decimatePath,
 } from '@/lib/geo-utils';
 
 describe('geo-utils', () => {
@@ -148,6 +149,55 @@ describe('geo-utils', () => {
       const km = pathDistanceKm(points);
       expect(km).toBeGreaterThan(280);
       expect(km).toBeLessThan(300);
+    });
+  });
+
+  describe('decimatePath', () => {
+    it('returns input unchanged when shorter than max', () => {
+      const points = [
+        { lat: 12.0, lng: 77.0 },
+        { lat: 12.1, lng: 77.1 },
+        { lat: 12.2, lng: 77.2 },
+      ];
+      expect(decimatePath(points, 10)).toEqual(points);
+    });
+
+    it('caps output length at max', () => {
+      const points = Array.from({ length: 5000 }, (_, i) => ({
+        lat: 12 + i * 0.001,
+        lng: 77 + i * 0.001,
+      }));
+      const out = decimatePath(points, 2000);
+      expect(out.length).toBeLessThanOrEqual(2000);
+      expect(out.length).toBeGreaterThan(1900); // close to the cap
+    });
+
+    it('always preserves first and last points (no tail truncation)', () => {
+      const points = Array.from({ length: 1000 }, (_, i) => ({
+        lat: 12 + i * 0.001,
+        lng: 77,
+      }));
+      const out = decimatePath(points, 50);
+      expect(out[0]).toEqual(points[0]);
+      expect(out[out.length - 1]).toEqual(points[points.length - 1]);
+    });
+
+    it('handles zero-distance paths', () => {
+      const same = { lat: 12.0, lng: 77.0 };
+      const out = decimatePath([same, same, same, same, same], 3);
+      expect(out.length).toBe(2);
+      expect(out[0]).toEqual(same);
+      expect(out[1]).toEqual(same);
+    });
+
+    it('returns input untouched when max <= 2', () => {
+      const points = [
+        { lat: 1, lng: 1 },
+        { lat: 2, lng: 2 },
+        { lat: 3, lng: 3 },
+      ];
+      expect(decimatePath(points, 2)).toEqual(points);
+      expect(decimatePath(points, 1)).toEqual(points);
     });
   });
 });

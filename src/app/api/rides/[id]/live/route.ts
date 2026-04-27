@@ -1,7 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { safeJsonParse } from "@/lib/json-utils";
+import { decimatePath } from "@/lib/geo-utils";
+import { fetchElevationStats } from "@/lib/elevation";
+
+// Cap returned path size. We fetch all points and decimate evenly along
+// distance so the visible polyline still covers the whole route — never
+// silently drops the oldest portion (which the previous take:2000 did).
+const MAX_PATH_POINTS = 2000;
 
 // GET /api/rides/[id]/live - fetch live session state + rider locations
 // ?since=<ISO timestamp>  — when provided, leadPath only includes points recorded
@@ -76,45 +83,19 @@ export async function GET(
       };
     });
 
-    // Get lead rider's path for route painting.
-    // Delta mode (?since=): only return points newer than the given timestamp so
-    // the client can append instead of re-fetching the full history each poll.
-    // Full mode (no ?since): cap at the last 2000 points to bound response size.
-    let leadPath: { lat: number; lng: number; recordedAt: string }[] = [];
-    if (session.leadRiderId) {
-      if (sinceDate) {
-        // Delta: only new points since the client's last known timestamp
-        const newPoints = await prisma.liveRideLocation.findMany({
-          where: {
-            sessionId: session.id,
-            userId: session.leadRiderId,
-            recordedAt: { gt: sinceDate },
-          },
-          orderBy: { recordedAt: "asc" },
-          select: { lat: true, lng: true, recordedAt: true },
-        });
-        leadPath = newPoints.map((l) => ({
-          lat: l.lat,
-          lng: l.lng,
-          recordedAt: l.recordedAt.toISOString(),
-        }));
-      } else {
-        // Full: return up to the last 2000 points in chronological order
-        const leadLocations = await prisma.liveRideLocation.findMany({
-          where: { sessionId: session.id, userId: session.leadRiderId },
-          orderBy: { recordedAt: "desc" },
-          take: 2000,
-          select: { lat: true, lng: true, recordedAt: true },
-        });
-        leadPath = leadLocations
-          .reverse()
-          .map((l) => ({
-            lat: l.lat,
-            lng: l.lng,
-            recordedAt: l.recordedAt.toISOString(),
-          }));
-      }
-    }
+    // Resolve the lead rider's path and the requesting user's own path.
+    // - Delta mode (?since=): only points newer than the client's cursor.
+    // - Full mode: fetch every point, then decimate evenly along distance to
+    //   MAX_PATH_POINTS so the visible polyline always spans the whole route.
+    // myPath is skipped when the requesting user IS the lead — same data.
+    const [leadPath, myPath] = await Promise.all([
+      session.leadRiderId
+        ? loadUserPath(session.id, session.leadRiderId, sinceDate)
+        : Promise.resolve([]),
+      session.leadRiderId === user.id
+        ? Promise.resolve([])
+        : loadUserPath(session.id, user.id, sinceDate),
+    ]);
 
     return NextResponse.json({
       session: {
@@ -137,6 +118,7 @@ export async function GET(
       },
       riders,
       leadPath,
+      myPath,
     });
   } catch (error) {
     console.error("[T2W] Live session GET error:", error);
@@ -145,6 +127,45 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+/**
+ * Load a single rider's GPS path for a session.
+ *
+ *   - Delta mode (sinceDate set): returns only points newer than the cursor;
+ *     the client appends them to its existing polyline.
+ *   - Full mode (no sinceDate): returns the full path, evenly decimated to
+ *     MAX_PATH_POINTS so a multi-hour ride doesn't lose its early portion.
+ */
+async function loadUserPath(
+  sessionId: string,
+  userId: string,
+  sinceDate: Date | null
+): Promise<{ lat: number; lng: number; recordedAt: string }[]> {
+  if (sinceDate) {
+    const newPoints = await prisma.liveRideLocation.findMany({
+      where: { sessionId, userId, recordedAt: { gt: sinceDate } },
+      orderBy: { recordedAt: "asc" },
+      select: { lat: true, lng: true, recordedAt: true },
+    });
+    return newPoints.map((l) => ({
+      lat: l.lat,
+      lng: l.lng,
+      recordedAt: l.recordedAt.toISOString(),
+    }));
+  }
+
+  const all = await prisma.liveRideLocation.findMany({
+    where: { sessionId, userId },
+    orderBy: { recordedAt: "asc" },
+    select: { lat: true, lng: true, recordedAt: true },
+  });
+  const decimated = decimatePath(all, MAX_PATH_POINTS);
+  return decimated.map((l) => ({
+    lat: l.lat,
+    lng: l.lng,
+    recordedAt: l.recordedAt.toISOString(),
+  }));
 }
 
 // POST /api/rides/[id]/live - control session (start/pause/resume/end)
@@ -296,6 +317,57 @@ export async function POST(
           data: { status: "completed" },
         });
         return upd;
+      });
+
+      // Backfill elevation gain/loss in the background. Capture session.id
+      // up front — getCurrentUser/cookies are not available inside after().
+      const sessionIdForElevation = session.id;
+      after(async () => {
+        try {
+          const fresh = await prisma.liveRideSession.findUnique({
+            where: { id: sessionIdForElevation },
+            select: {
+              id: true,
+              leadRiderId: true,
+              elevationGainM: true,
+            },
+          });
+          // Idempotency guard — never re-bill the Elevation API on retry.
+          if (!fresh || fresh.elevationGainM != null) return;
+
+          // Prefer the lead rider's path; fall back to the most-tracked rider
+          // (covers solo rides where leadRiderId never matched).
+          let pathUserId = fresh.leadRiderId;
+          if (!pathUserId) {
+            const top = await prisma.liveRideLocation.groupBy({
+              by: ["userId"],
+              where: { sessionId: sessionIdForElevation },
+              _count: { _all: true },
+              orderBy: { _count: { userId: "desc" } },
+              take: 1,
+            });
+            pathUserId = top[0]?.userId ?? null;
+          }
+          if (!pathUserId) return;
+
+          const points = await prisma.liveRideLocation.findMany({
+            where: { sessionId: sessionIdForElevation, userId: pathUserId },
+            orderBy: { recordedAt: "asc" },
+            select: { lat: true, lng: true },
+          });
+          const stats = await fetchElevationStats(points);
+          if (!stats) return;
+
+          await prisma.liveRideSession.update({
+            where: { id: sessionIdForElevation },
+            data: {
+              elevationGainM: stats.gainM,
+              elevationLossM: stats.lossM,
+            },
+          });
+        } catch (err) {
+          console.error("[T2W] Elevation backfill failed:", err);
+        }
       });
 
       return NextResponse.json({ session: updated, action: "ended" });

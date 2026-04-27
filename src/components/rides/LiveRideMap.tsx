@@ -6,13 +6,16 @@ import type { LiveRiderLocation } from "@/types";
 interface LiveRideMapProps {
   plannedRoute?: { lat: number; lng: number }[];
   leadPath: { lat: number; lng: number }[];
+  myPath?: { lat: number; lng: number }[];
+  /** Which path to paint as the active polyline. Defaults to "lead". */
+  pathView?: "lead" | "mine";
   riders: LiveRiderLocation[];
   startLocation?: { lat: number; lng: number };
   endLocation?: { lat: number; lng: number };
   isEnded?: boolean;
 }
 
-// Color scheme for rider markers
+// Color scheme for rider markers + polylines
 const MARKER_COLORS = {
   lead: "#22c55e",    // green
   sweep: "#ef4444",   // red
@@ -20,9 +23,16 @@ const MARKER_COLORS = {
   deviated: "#f97316", // orange
 };
 
+const PATH_COLORS = {
+  lead: MARKER_COLORS.lead, // green = the route everyone follows
+  mine: MARKER_COLORS.normal, // blue = your personal trail
+};
+
 export function LiveRideMap({
   plannedRoute,
   leadPath,
+  myPath = [],
+  pathView = "lead",
   riders,
   startLocation,
   endLocation,
@@ -88,11 +98,14 @@ export function LiveRideMap({
     }
   }, [plannedRoute]);
 
-  // Draw lead rider path (green solid)
+  // Draw the selected polyline (lead = green, mine = blue). Re-computed
+  // whenever the active path or its source data changes.
+  const activePath = pathView === "mine" ? myPath : leadPath;
+  const activeColor = pathView === "mine" ? PATH_COLORS.mine : PATH_COLORS.lead;
   useEffect(() => {
     if (!googleMapRef.current) return;
 
-    if (leadPath.length === 0) {
+    if (activePath.length === 0) {
       if (leadPolyRef.current) {
         leadPolyRef.current.setMap(null);
         leadPolyRef.current = null;
@@ -101,18 +114,19 @@ export function LiveRideMap({
     }
 
     if (leadPolyRef.current) {
-      leadPolyRef.current.setPath(leadPath);
+      leadPolyRef.current.setPath(activePath);
+      leadPolyRef.current.setOptions({ strokeColor: activeColor });
     } else {
       leadPolyRef.current = new google.maps.Polyline({
-        path: leadPath,
+        path: activePath,
         geodesic: true,
-        strokeColor: MARKER_COLORS.lead,
+        strokeColor: activeColor,
         strokeOpacity: 0.9,
         strokeWeight: 4,
         map: googleMapRef.current,
       });
     }
-  }, [leadPath]);
+  }, [activePath, activeColor]);
 
   // Create marker element
   const createMarkerContent = useCallback(
@@ -218,8 +232,8 @@ export function LiveRideMap({
       bounds.extend({ lat: r.lat, lng: r.lng });
       hasPoints = true;
     }
-    if (leadPath.length > 0) {
-      for (const p of leadPath) {
+    if (activePath.length > 0) {
+      for (const p of activePath) {
         bounds.extend(p);
         hasPoints = true;
       }
@@ -228,7 +242,7 @@ export function LiveRideMap({
     if (hasPoints) {
       googleMapRef.current.fitBounds(bounds, 50);
     }
-  }, [plannedRoute, riders, leadPath]);
+  }, [plannedRoute, riders, activePath]);
 
   return (
     <div className="relative w-full h-full">
