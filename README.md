@@ -322,6 +322,11 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="AIza…"
 # Separate from the public key (referrers don't apply server-side). Restrict
 # by API to "Elevation API" only. If unset, the Elevation Gain stat is hidden.
 GOOGLE_MAPS_SERVER_API_KEY="AIza…"
+
+# Vercel Blob — required for image uploads (avatars, ride posters, blog covers,
+# ride post photos, motorcycle pictures). Auto-set when you provision a Blob
+# store in the Vercel dashboard. Locally, run `vercel env pull` to populate it.
+BLOB_READ_WRITE_TOKEN="vercel_blob_rw_…"
 ```
 
 ---
@@ -374,7 +379,7 @@ The application is deployed continuously to **Vercel** with **Neon Postgres** as
 - **Frontend / API:** Vercel (Next.js 16 runtime, edge-friendly handlers)
 - **Database:** Neon serverless PostgreSQL (pooled connection at runtime, unpooled connection for migrations)
 - **Domain:** `taleson2wheels.com` over HTTPS with HSTS preload
-- **Image storage:** Base64 data URLs stored directly in Postgres rows (avatars, posters, blog covers)
+- **Image storage:** Vercel Blob (avatars, ride posters, blog covers, ride-post photos, motorcycle photos). Postgres columns hold the public CDN URL only — see `scripts/migrate-images-to-blob.ts` for the one-shot migration that converted the legacy base64-in-Postgres scheme.
 - **Email:** SMTP via Nodemailer (Gmail in production)
 
 ### Production deploy pipeline (`.github/workflows/deploy.yml`)
