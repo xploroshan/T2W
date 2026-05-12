@@ -38,6 +38,8 @@ import {
 import QRCode from "react-qr-code";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
+import { RideDetailSkeleton } from "@/components/shared/Skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
 import type { RidePost } from "@/types";
 
 // Cache for rider name->id, avatar, and role lookups (loaded once from API)
@@ -667,12 +669,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   };
 
   if (loading) {
+    // Structured skeleton matching the actual page shape — avoids the
+    // "blank then pop" layout shift the spinner used to cause.
     return (
-      <div className="flex min-h-screen items-center justify-center pt-24">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-t2w-accent" />
-          <p className="mt-4 text-t2w-muted">Loading ride details...</p>
-        </div>
+      <div className="pt-24">
+        <RideDetailSkeleton />
       </div>
     );
   }
@@ -680,15 +681,12 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   if (error || !ride) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-24">
-        <div className="text-center">
-          <Bike className="mx-auto h-16 w-16 text-t2w-border" />
-          <h2 className="mt-4 font-display text-2xl font-bold text-white">
-            Ride Not Found
-          </h2>
-          <Link href="/rides" className="mt-4 inline-block text-t2w-accent">
-            &larr; Back to Rides
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Bike className="h-6 w-6" />}
+          title="Ride Not Found"
+          body="The ride you're looking for may have been removed or the link is wrong."
+          action={{ label: "← Back to Rides", href: "/rides" }}
+        />
       </div>
     );
   }

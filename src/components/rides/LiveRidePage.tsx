@@ -552,17 +552,26 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       {/* Map */}
       <div className="flex-1 relative">
         {mapsLoaded ? (
-          <LiveRideMap
-            plannedRoute={session?.plannedRoute}
-            leadPath={leadPath}
-            riders={riders}
-            startLocation={session?.plannedRoute?.[0]}
-            endLocation={
-              session?.plannedRoute
-                ? session.plannedRoute[session.plannedRoute.length - 1]
-                : undefined
-            }
-          />
+          <>
+            <LiveRideMap
+              plannedRoute={session?.plannedRoute}
+              leadPath={leadPath}
+              riders={riders}
+              startLocation={session?.plannedRoute?.[0]}
+              endLocation={
+                session?.plannedRoute
+                  ? session.plannedRoute[session.plannedRoute.length - 1]
+                  : undefined
+              }
+            />
+            {/* "Nobody tracking yet" — empty state visible only while the
+                session is live and no rider markers have appeared. */}
+            {session?.status === "live" && riders.length === 0 && (
+              <div className="pointer-events-none absolute inset-x-4 top-20 mx-auto max-w-sm rounded-xl bg-gray-900/80 px-4 py-3 text-center text-sm text-white backdrop-blur-sm">
+                Waiting for the lead rider to start tracking…
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex h-full items-center justify-center bg-gray-100 dark:bg-gray-800/40">
             <div className="max-w-xs text-center px-6">

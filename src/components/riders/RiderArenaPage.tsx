@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Users } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
+import { RiderRowSkeletonList } from "@/components/shared/Skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ArenaHero } from "./ArenaHero";
 import { ArenaPodium } from "./ArenaPodium";
 import { ArenaLeaderboard } from "./ArenaLeaderboard";
@@ -97,8 +99,25 @@ export function RiderArenaPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-t2w-dark">
-        <Loader2 className="h-8 w-8 animate-spin text-t2w-accent" />
+      <div className="min-h-screen bg-t2w-dark pt-24">
+        <div className="mx-auto max-w-4xl px-4">
+          <RiderRowSkeletonList count={8} />
+        </div>
+      </div>
+    );
+  }
+
+  if (riders.length === 0) {
+    return (
+      <div className="min-h-screen bg-t2w-dark pt-24">
+        <div className="mx-auto max-w-2xl px-4">
+          <EmptyState
+            icon={<Users className="h-6 w-6" />}
+            title="No riders yet"
+            body="As members complete rides, they'll show up here ranked by distance, frequency, and the badges they've earned."
+            action={{ label: "See upcoming rides →", href: "/rides" }}
+          />
+        </div>
       </div>
     );
   }
