@@ -40,6 +40,7 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { RideDetailSkeleton } from "@/components/shared/Skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { AddToCalendar } from "./AddToCalendar";
 import type { RidePost } from "@/types";
 
 // Cache for rider name->id, avatar, and role lookups (loaded once from API)
@@ -1260,6 +1261,15 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Add to calendar — shown on every upcoming ride regardless
+                of registration status. Below the registration card so
+                it's still discoverable for confirmed riders. */}
+            {ride.status === "upcoming" && (
+              <div className="card sticky top-28 sm:static flex items-center justify-between gap-3">
+                <span className="text-sm text-t2w-muted">Save the date</span>
+                <AddToCalendar ride={ride} variant="primary" />
+              </div>
+            )}
             {/* Registration Card - for upcoming rides */}
             {ride.status === "upcoming" && !registered && (
               <div className="card sticky top-28">
