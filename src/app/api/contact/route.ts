@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import nodemailer from "nodemailer";
-
-// Rate-limit: track submissions by IP (in-memory, resets on deploy)
-const recentSubmissions = new Map<string, number>();
-const RATE_LIMIT_MS = 60_000; // 1 minute between submissions per IP
+import { checkRate } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,16 +22,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Basic rate limiting
+    // Contact-form-specific rate limit (3/hour per IP — separate budget
+    // from the general middleware auth/api buckets). Backed by Vercel KV
+    // in production so the limit holds across Lambda cold starts.
     const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
-    const lastSubmission = recentSubmissions.get(ip);
-    if (lastSubmission && Date.now() - lastSubmission < RATE_LIMIT_MS) {
+    if (await checkRate(ip, "contact")) {
       return NextResponse.json(
-        { error: "Please wait a minute before sending another message" },
+        { error: "Too many messages — please try again in an hour" },
         { status: 429 }
       );
     }
-    recentSubmissions.set(ip, Date.now());
 
     const smtpUser = (process.env.SMTP_USER || "").trim();
     const smtpPass = (process.env.SMTP_PASS || "").trim();

@@ -1,42 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// ---------------------------------------------------------------------------
-// Rate-limit config (per IP, per route class)
-// ---------------------------------------------------------------------------
-const RATE_LIMITS = {
-  auth:    { window: 60_000, max: 10  }, // login / register / OTP
-  api:     { window: 60_000, max: 60  }, // general API
-  general: { window: 60_000, max: 300 }, // pages & static
-};
-
-// In-memory store (per edge-node instance; resets on cold start — fine for WAF)
-const rateMap = new Map<string, { count: number; resetAt: number }>();
-
-// Periodically prune expired entries to prevent unbounded growth
-let lastPrune = Date.now();
-function pruneRateMap() {
-  const now = Date.now();
-  if (now - lastPrune < 120_000) return;
-  lastPrune = now;
-  for (const [key, entry] of rateMap) {
-    if (now > entry.resetAt) rateMap.delete(key);
-  }
-}
-
-function isRateLimited(ip: string, type: keyof typeof RATE_LIMITS): boolean {
-  pruneRateMap();
-  const { window, max } = RATE_LIMITS[type];
-  const now = Date.now();
-  const key = `${type}:${ip}`;
-  const entry = rateMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateMap.set(key, { count: 1, resetAt: now + window });
-    return false;
-  }
-  if (entry.count >= max) return true;
-  entry.count++;
-  return false;
-}
+import { checkRate, checkRateSync } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // Known malicious / scanner user-agents
@@ -105,7 +68,7 @@ function block(reason: string, status: number): NextResponse {
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { nextUrl, headers } = request;
   const host = headers.get("host") ?? nextUrl.hostname;
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
@@ -136,12 +99,22 @@ export function middleware(request: NextRequest): NextResponse {
   }
 
   // ── 4. Rate limiting ──────────────────────────────────────────────────────
+  // Auth routes get the KV-backed limiter (persistent across cold starts and
+  // Lambda instances). General + api routes stay on the per-instance
+  // in-memory check — they're best-effort abuse protection, not security-
+  // critical, and we don't want the extra ~30 ms KV round-trip on every page.
   const isAuthRoute = /^\/api\/auth\/(login|register|send-otp|verify-otp|reset-password)/.test(pathname);
   const isApiRoute  = pathname.startsWith("/api/");
 
-  const limitType = isAuthRoute ? "auth" : isApiRoute ? "api" : "general";
-  if (isRateLimited(ip, limitType)) {
-    return block("Too many requests — please slow down", 429);
+  if (isAuthRoute) {
+    if (await checkRate(ip, "auth")) {
+      return block("Too many requests — please slow down", 429);
+    }
+  } else {
+    const limitType = isApiRoute ? "api" : "general";
+    if (checkRateSync(ip, limitType)) {
+      return block("Too many requests — please slow down", 429);
+    }
   }
 
   return NextResponse.next();
