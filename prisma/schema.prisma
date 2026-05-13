@@ -107,7 +107,10 @@ model Motorcycle {
 
 model Badge {
   id          String @id @default(cuid())
-  tier        String @unique // SILVER | GOLD | PLATINUM | DIAMOND | ACE | CONQUEROR
+  tier        String @unique // SILVER | GOLD | … | RIDE_500K | RIDE_2000M | RIDE_70AVG
+  // kind disambiguates lifetime-km tiers (auto-awarded by total km) from
+  // per-ride event achievements (awarded by the live POST end action).
+  kind        String @default("lifetime_km") // lifetime_km | per_ride
   name        String
   description String
   minKm       Float

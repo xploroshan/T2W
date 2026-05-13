@@ -414,6 +414,158 @@ function rideReminderHtml(ride: RideEmailPayload): string {
   `;
 }
 
+/**
+ * Post-ride recap email — sent ~6 hours after a session is marked ended.
+ *
+ * One email goes to every confirmed registrant, with the ride totals and a
+ * deep-link to the Relive page. We use the existing per-ride
+ * @@unique([rideId, tier]) constraint by writing tier="recap", so the cron
+ * naturally dedupes if scheduling fires twice.
+ */
+export async function sendRideRecapEmails(
+  rideId: string,
+  ride: RideEmailPayload
+): Promise<void> {
+  const session = await prisma.liveRideSession.findUnique({
+    where: { rideId },
+    select: {
+      distanceKmOverride: true,
+      avgSpeedKmhOverride: true,
+      maxSpeedKmhOverride: true,
+      movingMinutesOverride: true,
+      elevationGainM: true,
+      startedAt: true,
+      endedAt: true,
+    },
+  });
+
+  // Confirmed registrants only — never email someone whose registration was
+  // rejected or pending.
+  const registrations = await prisma.rideRegistration.findMany({
+    where: { rideId, approvalStatus: "confirmed" },
+    select: { email: true, riderName: true, userId: true },
+  });
+  const recipients = registrations.filter((r) => r.email && r.email.includes("@"));
+  if (recipients.length === 0) {
+    console.warn(`[T2W] Recap email: 0 confirmed registrants for ride ${rideId}`);
+    return;
+  }
+
+  // Pull the most recent ready video export (any rider's) so the email can
+  // embed a thumbnail. This is best-effort — we send the recap even if the
+  // video isn't ready yet.
+  const readyExport = await prisma.rideVideoExport.findFirst({
+    where: { rideId, status: "ready", thumbnailUrl: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { thumbnailUrl: true },
+  });
+
+  const distanceKm =
+    session?.distanceKmOverride ?? ride.distanceKm ?? 0;
+  const avgSpeedKmh = session?.avgSpeedKmhOverride ?? null;
+  const maxSpeedKmh = session?.maxSpeedKmhOverride ?? null;
+  const movingMinutes = session?.movingMinutesOverride ?? null;
+  const elevationGainM = session?.elevationGainM ?? null;
+
+  const san = (s: string) => s.replace(/[\r\n]/g, " ");
+  const subject = `Your ride recap — ${san(ride.title)}`;
+  const html = rideRecapHtml({
+    ride,
+    distanceKm,
+    avgSpeedKmh,
+    maxSpeedKmh,
+    movingMinutes,
+    elevationGainM,
+    thumbnailUrl: readyExport?.thumbnailUrl ?? null,
+  });
+
+  const CONCURRENCY = 5;
+  let sent = 0;
+  const failures: { to: string; reason: unknown }[] = [];
+  for (let i = 0; i < recipients.length; i += CONCURRENCY) {
+    const slice = recipients.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      slice.map((r) => sendEmail(r.email, subject, html))
+    );
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") failures.push({ to: slice[idx].email, reason: r.reason });
+      else sent += 1;
+    });
+  }
+  if (failures.length) {
+    for (const f of failures) console.error(`[T2W] Recap email failed (to=${f.to}):`, f.reason);
+  }
+  console.log(`[T2W] Recap email: ride=${rideId}, sent=${sent}, failed=${failures.length}`);
+}
+
+function rideRecapHtml(args: {
+  ride: RideEmailPayload;
+  distanceKm: number;
+  avgSpeedKmh: number | null;
+  maxSpeedKmh: number | null;
+  movingMinutes: number | null;
+  elevationGainM: number | null;
+  thumbnailUrl: string | null;
+}): string {
+  const { ride } = args;
+  const BASE_URL = "https://taleson2wheels.com";
+  const reliveUrl = `${BASE_URL}/ride/${escapeHtml(ride.id)}/relive`;
+  const rideUrl = `${BASE_URL}/ride/${escapeHtml(ride.id)}`;
+  const title = escapeHtml(ride.title);
+  const route = `${escapeHtml(ride.startLocation)} → ${escapeHtml(ride.endLocation)}`;
+  const fmtMin = (m: number | null) => {
+    if (m == null) return "—";
+    const h = Math.floor(m / 60);
+    const r = Math.round(m % 60);
+    return h > 0 ? `${h}h ${r}m` : `${r}m`;
+  };
+  const stats: { label: string; value: string }[] = [
+    { label: "Distance", value: `${args.distanceKm.toFixed(1)} km` },
+    { label: "Moving time", value: fmtMin(args.movingMinutes) },
+    { label: "Avg speed", value: args.avgSpeedKmh != null ? `${args.avgSpeedKmh.toFixed(1)} km/h` : "—" },
+    { label: "Max speed", value: args.maxSpeedKmh != null ? `${args.maxSpeedKmh.toFixed(0)} km/h` : "—" },
+    { label: "Elevation gain", value: args.elevationGainM != null ? `${args.elevationGainM.toFixed(0)} m` : "—" },
+  ];
+  const statRows = stats
+    .map(
+      (s) => `
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:13px;">${escapeHtml(s.label)}</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;text-align:right;">${escapeHtml(s.value)}</td>
+        </tr>`
+    )
+    .join("");
+  const thumb = args.thumbnailUrl
+    ? `<a href="${reliveUrl}" style="display:block;margin-top:18px;"><img src="${escapeHtml(args.thumbnailUrl)}" alt="Ride flyover" style="display:block;width:100%;max-width:520px;border-radius:12px;" /></a>`
+    : "";
+  return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;padding:32px;max-width:600px;">
+        <tr><td>
+          <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.18em;color:#0ea5e9;">${escapeHtml(ride.rideNumber)} recap</p>
+          <h1 style="margin:6px 0 4px 0;font-size:24px;line-height:1.2;">${title}</h1>
+          <p style="margin:0;color:#64748b;font-size:14px;">${route}</p>
+          ${thumb}
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #e2e8f0;">
+            ${statRows}
+          </table>
+          <div style="margin-top:24px;text-align:center;">
+            <a href="${reliveUrl}" style="display:inline-block;background:#facc15;color:#0f172a;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px;font-size:14px;">Watch your Relive</a>
+          </div>
+          <p style="margin:24px 0 0 0;font-size:12px;color:#94a3b8;text-align:center;">
+            <a href="${rideUrl}" style="color:#94a3b8;text-decoration:underline;">View ride summary</a> · Tales on 2 Wheels
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`.trim();
+}
+
 export async function sendRideReminderEmails(
   rideId: string,
   ride: RideEmailPayload,

@@ -322,6 +322,24 @@ export async function POST(
           where: { id: rideId },
           data: { status: "completed" },
         });
+        // Schedule the post-ride recap email — single row per ride, dispatched
+        // by the existing /api/cron/send-scheduled-emails minute-cron. The
+        // unique([rideId, tier]) constraint dedupes on retries automatically.
+        const recapDelayHours =
+          Number(process.env.RIDE_RECAP_DELAY_HOURS) > 0
+            ? Number(process.env.RIDE_RECAP_DELAY_HOURS)
+            : 6;
+        const scheduledAt = new Date(endedAt.getTime() + recapDelayHours * 60 * 60 * 1000);
+        await tx.scheduledEmail.upsert({
+          where: { rideId_tier: { rideId, tier: "recap" } },
+          create: {
+            rideId,
+            tier: "recap",
+            notifyMode: "all",
+            scheduledAt,
+          },
+          update: { scheduledAt, sentAt: null },
+        });
         return upd;
       });
 
@@ -373,6 +391,22 @@ export async function POST(
           });
         } catch (err) {
           console.error("[T2W] Elevation backfill failed:", err);
+        }
+      });
+
+      // Per-ride badge awards. Runs as its own after() so it doesn't depend
+      // on the elevation backfill completing first — `awardPerRideBadgesForSession`
+      // re-reads the session and works with whatever elevationGainM is set
+      // when it runs (null = no climber badge this round; user can re-end to
+      // re-evaluate once the backfill lands).
+      after(async () => {
+        try {
+          const { awardPerRideBadgesForSession } = await import(
+            "@/lib/badges/award-on-completion"
+          );
+          await awardPerRideBadgesForSession(sessionIdForElevation);
+        } catch (err) {
+          console.error("[T2W] Per-ride badge award hook failed:", err);
         }
       });
 
