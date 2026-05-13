@@ -11,6 +11,9 @@ vi.mock('@/lib/db', () => {
     liveRideBreak: {
       updateMany: vi.fn(),
     },
+    scheduledEmail: {
+      upsert: vi.fn(),
+    },
     ride: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -368,6 +371,8 @@ describe('POST /api/rides/[id]/live', () => {
     mockRideUpdate.mockResolvedValue({});
     // Route now auto-closes any open breaks in the same transaction
     vi.mocked(prisma.liveRideBreak.updateMany).mockResolvedValue({ count: 0 } as any);
+    // Route now also schedules the post-ride recap email row inside the same transaction
+    vi.mocked(prisma.scheduledEmail.upsert).mockResolvedValue({} as any);
 
     const res = await callPOST('ride-1', { action: 'end' });
     const { status, data } = await parseResponse(res);

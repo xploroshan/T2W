@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sendTierAnnouncementEmails } from "@/lib/email";
+import { sendRideRecapEmails, sendTierAnnouncementEmails } from "@/lib/email";
 
 type RideTier = "core" | "t2w" | "rider_guest";
 type NotifyMode = "all" | "selected";
@@ -56,11 +56,15 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      await sendTierAnnouncementEmails(
-        job.ride,
-        job.tier as RideTier,
-        job.notifyMode as NotifyMode
-      );
+      if (job.tier === "recap") {
+        await sendRideRecapEmails(job.rideId, job.ride);
+      } else {
+        await sendTierAnnouncementEmails(
+          job.ride,
+          job.tier as RideTier,
+          job.notifyMode as NotifyMode
+        );
+      }
       results.sent += 1;
     } catch (err) {
       console.error(`[T2W] Cron: job ${job.id} (ride=${job.rideId}, tier=${job.tier}) failed:`, err);
