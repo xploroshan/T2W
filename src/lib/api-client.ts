@@ -1279,7 +1279,22 @@ export const api = {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to load analytics");
       }
-      return res.json() as Promise<import("@/types").RideAnalytics>;
+      const data = (await res.json()) as Partial<import("@/types").RideAnalytics>;
+      // Validate shape — the post-ride view shares the `/live**` URL space
+      // with the live session endpoint, and a malformed payload (e.g. a
+      // test mock that intercepts everything under /live) would crash the
+      // page when the consumer reads .splits/.climb on undefined. Reject
+      // anything that doesn't look like an analytics response.
+      if (
+        !data ||
+        !Array.isArray(data.splits) ||
+        !Array.isArray(data.leaderboard) ||
+        typeof data.climb !== "object" ||
+        data.climb === null
+      ) {
+        throw new Error("Malformed analytics payload");
+      }
+      return data as import("@/types").RideAnalytics;
     },
   },
 
