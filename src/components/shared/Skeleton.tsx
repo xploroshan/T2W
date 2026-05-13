@@ -89,3 +89,32 @@ export function RiderRowSkeletonList({ count = 8 }: { count?: number }) {
     </div>
   );
 }
+
+/**
+ * Page-shaped skeleton for the ride detail page. Matches the actual
+ * layout (poster header + main body + sticky sidebar) so the layout
+ * doesn't shift when real data arrives.
+ */
+export function RideDetailSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8" aria-busy="true">
+      <Skeleton className="h-48 w-full rounded-2xl sm:h-64" />
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+          <div className="mt-6 space-y-2">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-4/6" />
+          </div>
+          <Skeleton className="mt-6 h-40 w-full rounded-xl" />
+        </div>
+        <div className="space-y-4">
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}

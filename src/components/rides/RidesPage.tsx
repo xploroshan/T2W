@@ -18,6 +18,8 @@ import {
 import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
 import { RideCardSkeletonGrid } from "@/components/shared/Skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { AddToCalendar } from "./AddToCalendar";
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -355,27 +357,30 @@ export function RidesPage() {
                 </div>
 
                 {ride.status === "upcoming" && (
-                  <div className="mt-5 flex items-center justify-between border-t border-t2w-border pt-4">
+                  <div className="mt-5 flex items-center justify-between gap-2 border-t border-t2w-border pt-4">
                     <span className="text-sm font-semibold text-t2w-gold">
                       ₹{ride.fee.toLocaleString()}
                     </span>
-                    {ride.myRegistrationStatus === "confirmed" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">
-                        ✓ Registered
-                      </span>
-                    ) : ride.myRegistrationStatus === "pending" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
-                        Pending approval
-                      </span>
-                    ) : ride.myRegistrationStatus === "rejected" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300">
-                        Not approved
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-sm font-medium text-t2w-accent">
-                        Register <ArrowRight className="h-4 w-4" />
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <AddToCalendar ride={ride} variant="ghost" stopPropagation />
+                      {ride.myRegistrationStatus === "confirmed" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">
+                          ✓ Registered
+                        </span>
+                      ) : ride.myRegistrationStatus === "pending" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
+                          Pending approval
+                        </span>
+                      ) : ride.myRegistrationStatus === "rejected" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300">
+                          Not approved
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-sm font-medium text-t2w-accent">
+                          Register <ArrowRight className="h-4 w-4" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </Link>
@@ -469,14 +474,13 @@ export function RidesPage() {
         )}
 
         {filtered.length === 0 && (
-          <div className="py-20 text-center">
-            <Bike className="mx-auto h-16 w-16 text-t2w-border" />
-            <h3 className="mt-4 font-display text-xl font-bold text-white">
-              No rides found
-            </h3>
-            <p className="mt-2 text-t2w-muted">
-              Try adjusting your filters or search query.
-            </p>
+          <div className="py-20">
+            <EmptyState
+              icon={<Bike className="h-6 w-6" />}
+              title="No rides found"
+              body="Try adjusting your filters, or browse past adventures the community has already finished."
+              action={{ label: "Browse past rides →", href: "/rides?status=completed" }}
+            />
           </div>
         )}
       </div>
