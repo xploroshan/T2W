@@ -43,6 +43,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoComplete="email"
               textContentType="emailAddress"
+              testID="login-email"
             />
             <TextField
               label="Password"
@@ -51,6 +52,7 @@ export default function LoginScreen() {
               secureTextEntry
               autoComplete="current-password"
               textContentType="password"
+              testID="login-password"
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button label="Sign in" onPress={submit} loading={busy} />

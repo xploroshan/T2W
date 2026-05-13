@@ -1,0 +1,20 @@
+appId: com.taleson2wheels.app
+name: Profile + sign out
+tags:
+  - smoke
+  - auth
+---
+# Verifies that the Profile tab shows the user's stats and that signing
+# out returns to the unauthenticated login screen.
+
+- runFlow: login-smoke.yaml
+
+- tapOn: "Profile"
+- assertVisible: "Total km"
+- assertVisible: "Rides done"
+- assertVisible: "My garage"
+
+- tapOn: "Sign out"
+
+- assertVisible: "Sign in"
+- assertNotVisible: "Profile"

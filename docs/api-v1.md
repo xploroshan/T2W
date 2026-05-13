@@ -161,7 +161,7 @@ Payloads carry a `data` field with a `kind` discriminator (`ride` | `blog` | `ac
 
 ## Admin (`/api/v1/admin/*`)
 
-All admin endpoints require `superadmin` or `core_member`. Role-change is additionally guarded by `canManageRoles`.
+All admin endpoints require `superadmin` or `core_member`. Role-change is additionally guarded by `canManageRoles`. Ride deletion and activity-log rollback require `superadmin`.
 
 | Endpoint | Description |
 |---|---|
@@ -169,15 +169,26 @@ All admin endpoints require `superadmin` or `core_member`. Role-change is additi
 | `POST /api/v1/admin/users/:id/approve` | Approve a pending user (pushes welcome notification). |
 | `POST /api/v1/admin/users/:id/reject` | Delete a pending user. |
 | `PATCH /api/v1/admin/users/:id/role` | Body `{ newRole }`. Super admins can set any role; core members are limited to `rider` / `t2w_rider`. |
+| `POST /api/v1/admin/rides` | Create a ride (core members need `canCreateRide`). |
+| `PATCH /api/v1/admin/rides/:id` | Update a ride. |
+| `DELETE /api/v1/admin/rides/:id` | Delete a ride. **Super admin only.** |
 | `GET /api/v1/admin/rides/:id/registrations?status=…` | Full PII registration list for moderation. |
 | `PATCH /api/v1/admin/registrations/:regId` | Body `{ approvalStatus, accommodationType? }`. Race-safe capacity guard on approve. Pushes the rider. |
-| `GET /api/v1/admin/activity-log?cursor=…` | Audit trail. `hasRollback` indicates whether the entry has a rollback payload (rollback action is web-only for now). |
+| `GET /api/v1/admin/activity-log?cursor=…` | Audit trail. `hasRollback` indicates whether the entry has a rollback payload. |
+| `POST /api/v1/admin/activity-log/:id/rollback` | **Super admin only.** Server-side rollback for `ride_edited`, `ride_deleted`, `user_role_changed`, `user_deleted`. Marks the entry `[ROLLED BACK]`. |
 
-## Site settings (UPI)
+## Site settings
 
 | Endpoint | Description |
 |---|---|
 | `GET /api/v1/site-settings/:key` | Public keys: `upi_config`, `reg_form_settings`, `arena_weights`, `achievement_settings`, `role_permissions`. Other keys require admin. |
+| `PUT /api/v1/site-settings/:key` | Upsert a setting. Body `{ value }`. Admin only. |
+
+## Post-ride summary
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/rides/:id/post-ride-summary` | Group + personal totals, per-km splits, elevation summary (null when no smoothed elevation exists yet). Uses the smoothed lead path for distance when available; raw GPS otherwise. |
 
 ## Upload
 

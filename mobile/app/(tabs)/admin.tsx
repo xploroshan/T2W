@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ClipboardList, ListChecks, Users } from "lucide-react-native";
+import { ChevronRight, ClipboardList, ListChecks, MapPin, Settings, Users } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { listAdminUsers } from "@/api/admin";
 import { listRides } from "@/api/rides";
@@ -53,15 +53,27 @@ export default function AdminHome() {
           onPress={() => router.push("/admin/registrations")}
         />
         <Row
+          icon={<MapPin color={colors.primary} size={20} />}
+          label="Create a new ride"
+          sublabel="Schedule a ride and open registrations"
+          onPress={() => router.push("/admin/rides/new")}
+        />
+        <Row
+          icon={<Settings color={colors.primary} size={20} />}
+          label="Site settings"
+          sublabel="UPI config, registration form, role permissions"
+          onPress={() => router.push("/admin/settings")}
+        />
+        <Row
           icon={<ClipboardList color={colors.primary} size={20} />}
           label="Activity log"
-          sublabel="Audit trail of admin actions"
+          sublabel="Audit trail of admin actions, with rollback"
           onPress={() => router.push("/admin/activity-log")}
         />
 
         <Text style={[text.caption, { marginTop: spacing.lg }]}>
-          Heavier admin surfaces (ride CRUD, site settings, scheduled emails)
-          remain on the web for now. They'll come to mobile in Phase 3.
+          Heavier surfaces (per-ride form customisation, scheduled emails,
+          GPX import) remain on the web.
         </Text>
       </ScrollView>
     </Screen>

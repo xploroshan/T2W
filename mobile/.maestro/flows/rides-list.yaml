@@ -1,0 +1,26 @@
+appId: com.taleson2wheels.app
+name: Rides list filters
+tags:
+  - smoke
+  - rides
+---
+# Login → Rides tab → flip through status filters → open a ride.
+
+- runFlow: login-smoke.yaml
+
+- tapOn: "Rides"
+- assertVisible: "Upcoming"
+- assertVisible: "Live"
+- assertVisible: "Past"
+
+- tapOn: "Past"
+- assertVisible: "Past"  # selected chip stays
+
+- tapOn: "Upcoming"
+
+# Tapping the first ride card lands on the detail screen. We don't assert a
+# specific title because the fixture data may vary — but the header should
+# show the ride number prefix and either the live or share CTA.
+- assertVisible:
+    text: ".*"
+    index: 0

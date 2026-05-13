@@ -14,10 +14,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { getRide } from "@/api/rides";
+import { useAuth } from "@/auth/AuthProvider";
 import { colors, radius, spacing, text } from "@/theme";
 
 export default function RideDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const auth = useAuth();
+  const isAdmin =
+    auth.status === "authed" &&
+    (auth.user.role === "superadmin" || auth.user.role === "core_member");
   const query = useQuery({
     queryKey: ["ride", id],
     queryFn: () => getRide(id),
@@ -146,6 +151,24 @@ export default function RideDetailScreen() {
             onPress={() => router.push(`/ride/${ride.id}/posts`)}
             style={{ marginTop: spacing.md }}
           />
+
+          {ride.status === "completed" ? (
+            <Button
+              label="Post-ride summary"
+              variant="secondary"
+              onPress={() => router.push(`/ride/${ride.id}/summary`)}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : null}
+
+          {isAdmin ? (
+            <Button
+              label="Edit ride"
+              variant="secondary"
+              onPress={() => router.push(`/admin/rides/${ride.id}/edit`)}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </Screen>

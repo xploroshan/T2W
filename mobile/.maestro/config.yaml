@@ -1,0 +1,11 @@
+appId: com.taleson2wheels.app
+---
+# Maestro orchestration config for the T2W mobile app.
+#
+# Run locally:    maestro test .maestro/flows/login-smoke.yaml
+# Run all:        maestro test .maestro/flows/
+# Run in cloud:   maestro cloud --app <ipa-or-apk> .maestro/flows/
+#
+# Each flow is independent — they start from a launched app and use the
+# fixture credentials below. Set MAESTRO_T2W_EMAIL / MAESTRO_T2W_PASSWORD
+# in your shell (or in Maestro Cloud secrets) before running.

@@ -162,17 +162,48 @@ activity-log rollback) remain on the web for now.
 - Profile → "Contact crew" → authenticated contact-form. Rate-limited at
   3/hour/IP on the backend.
 
+## Admin: ride CRUD, site settings, rollback
+
+- **Create ride**: `/admin/rides/new` from the Admin tab — title, type,
+  dates, locations, distance/fee/capacity, difficulty, description,
+  highlights, lead/sweep. Per-ride form settings and staggered open
+  windows are still web-only.
+- **Edit / delete ride**: ride detail → "Edit ride" (admins only).
+  Delete is super-admin only and confirmation-gated.
+- **Site settings**: `/admin/settings` — currently the UPI config editor.
+  Other JSON-blob settings (registration form, role permissions, email
+  templates) stay on the web.
+- **Activity-log rollback**: a "Roll back" button shows on supported
+  actions (`ride_edited`, `ride_deleted`, `user_role_changed`,
+  `user_deleted`) for super admins. Marks the entry `[ROLLED BACK]`.
+
+## Post-ride summary
+
+`/ride/[id]/summary` shows group + personal totals, per-km splits, and
+the elevation card when a smoothed series exists. Linked from the ride
+detail page on completed rides; also reachable from the share screen.
+
+## E2E tests (Maestro)
+
+Smoke flows live in `.maestro/`:
+
+```bash
+export MAESTRO_T2W_EMAIL=…  MAESTRO_T2W_PASSWORD=…
+maestro test mobile/.maestro/flows/                 # all
+maestro test mobile/.maestro/flows/login-smoke.yaml # one
+```
+
+See `.maestro/README.md` for cloud-build instructions. Flows are shallow
+on purpose — they verify the auth gate and navigation skeleton, not
+deep feature behaviour.
+
 ## What's not done yet
 
-- Ride CRUD on mobile (create / edit / delete rides — admins still use the
-  web for this; the dedicated `/admin/rides` surface is deferred).
-- Site settings editor on mobile (form-config / UPI / email templates —
-  read-only via `site-settings/:key` for now).
-- Activity-log rollback action (web-only because the rollback payload
-  schema varies per action).
-- Post-ride summary (smoothed distance, splits, elevation) — `live/metrics`
-  is what mobile uses; the analytics-heavy summary stays on the web.
-- E2E with Maestro.
+- Per-ride form customisation on mobile (the `regFormSettings` JSON
+  editor — easier on a wider screen).
+- Scheduled email management (the Vercel cron + `ScheduledEmail` table
+  are web-only).
+- Tablet-optimised layouts (participation matrix etc.).
 
 ## A note on Expo dependency versions
 

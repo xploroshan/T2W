@@ -1,0 +1,31 @@
+appId: com.taleson2wheels.app
+name: Login smoke
+tags:
+  - smoke
+  - auth
+---
+# Verifies the cold-start anonymous gate, the login screen, and the
+# transition to the authenticated home tab. Drives the form via testIDs
+# so the flow doesn't break when copy changes.
+
+- launchApp:
+    clearState: true
+
+- assertVisible: "Tales on 2 Wheels"
+- assertVisible: "Sign in"
+
+- tapOn:
+    id: "login-email"
+- inputText: ${MAESTRO_T2W_EMAIL}
+
+- tapOn:
+    id: "login-password"
+- inputText: ${MAESTRO_T2W_PASSWORD}
+
+- tapOn: "Sign in"
+
+# Bottom tab + the upcoming-rides header are the strongest signals that
+# the auth gate flipped and the data loaders have started.
+- assertVisible: "Home"
+- assertVisible: "Rides"
+- assertVisible: "Upcoming rides"
