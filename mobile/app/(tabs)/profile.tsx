@@ -1,5 +1,7 @@
 import React from "react";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { ChevronRight } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/auth/AuthProvider";
@@ -44,6 +46,12 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <View style={styles.section}>
+          <LinkRow label="My garage" onPress={() => router.push("/garage")} />
+          <LinkRow label="Riding guidelines" onPress={() => router.push("/guidelines")} />
+          <LinkRow label="Blogs" onPress={() => router.push("/blogs")} />
+        </View>
+
         <Button label="Sign out" variant="secondary" onPress={() => auth.logout()} />
       </ScrollView>
     </Screen>
@@ -65,6 +73,18 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
+  );
+}
+
+function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+    >
+      <Text style={styles.rowValue}>{label}</Text>
+      <ChevronRight color={colors.textSecondary} size={18} />
+    </Pressable>
   );
 }
 

@@ -81,32 +81,42 @@ mobile/
 
 ## What's wired up
 
-- Login / register / forgot-password (OTP-based, mirrors web)
-- Sign-out (server-side refresh-token revoke + local secure-store clear)
-- Tabs: Home (upcoming rides + notifications), Rides (paginated, filtered),
-  Profile (stats, account info, sign-out)
-- Ride detail with crew, highlights, confirmed riders, and your own
-  registration status when present
-- API client with single-flight refresh and one-shot 401 retry
+- **Auth** — login / register (OTP) / forgot-password (4-step reset). Refresh
+  token in Keychain, rotating on every refresh, reuse-detection on the server.
+- **Push registration** — Expo push token requested + posted to
+  `POST /api/v1/devices` automatically after login; deregistered on sign-out.
+- **Tabs**:
+  - **Home** — upcoming rides preview, notifications, pending-approval banner.
+  - **Rides** — paginated list with status filter (upcoming / live / past / all).
+  - **Arena** — leaderboard with 6m / 1y / all-time filter.
+  - **Profile** — stats, account info, links to garage / guidelines / blogs.
+- **Ride detail** with crew, highlights, confirmed riders, registration CTA.
+- **Ride registration** — full form with UPI QR (generated from `upi_config`
+  site setting), payment-screenshot upload via `expo-image-picker` →
+  `POST /api/v1/upload`.
+- **Live ride** (the headline feature):
+  - Background GPS via `expo-task-manager` + foreground service on Android.
+  - Local AsyncStorage queue that batches up to 50 points every 30 s.
+  - One-shot retry, survives offline + reconnect.
+  - `react-native-maps` view with lead-rider polyline, your polyline, planned
+    route overlay, and per-rider markers (lead/sweep/others colour-coded).
+  - Real-time metrics (group + personal): distance, moving time, avg/max speed.
+- **Garage** — list + add + remove motorcycles.
+- **Guidelines** and **Blogs** (read-only).
+- **API client** with single-flight refresh and one-shot 401 retry.
 
 ## What's not done yet
 
-Tracked against the plan's Phase 1:
-
-- Ride registration screen (mobile equivalent of the web form, with UPI QR
-  and payment-proof upload)
-- Live ride join + background GPS tracking (the headline feature — needs
-  `expo-task-manager` + foreground service notification)
-- Live ride map with `react-native-maps`, breaks, deviation alerts
-- Share card via `react-native-view-shot` (1080×1920) + share sheet
-- Push notifications (FCM/APNs) — backend route `POST /api/v1/devices`
-  exists; mobile registration + server-side push dispatch still TBD
-- Garage CRUD, badges, leaderboard, guidelines (read-only screens are
-  straightforward but not built yet)
-- Blogs and ride-posts (Phase 2)
-- Admin features (Phase 3)
-- Sentry integration
-- E2E with Maestro
+- Ride post-ride summary (smoothed distance, splits, elevation) — currently
+  uses the lighter `/api/v1/rides/:id/live/metrics` shape.
+- Share card via `react-native-view-shot` (`react-native-view-shot` is in
+  `package.json` for this).
+- Server-side push **dispatch** — `POST /api/v1/devices` records the token,
+  but the actual FCM/APNs send from a notification-creation path is still TBD.
+- Ride posts (community photo posts).
+- Admin moderation surfaces.
+- Sentry init.
+- E2E with Maestro.
 
 ## Submitting to TestFlight
 

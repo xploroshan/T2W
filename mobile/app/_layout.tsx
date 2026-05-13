@@ -1,4 +1,5 @@
 import "react-native-gesture-handler";
+import "@/live/background-task"; // registers the TaskManager task at startup
 import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Stack, Redirect, useSegments } from "expo-router";
@@ -57,7 +58,13 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="ride/[id]" options={{ title: "Ride" }} />
+              <Stack.Screen name="ride/[id]/index" options={{ title: "Ride" }} />
+              <Stack.Screen name="ride/[id]/live" options={{ title: "Live ride" }} />
+              <Stack.Screen name="ride/[id]/register" options={{ title: "Register" }} />
+              <Stack.Screen name="garage" options={{ title: "Garage" }} />
+              <Stack.Screen name="guidelines" options={{ title: "Guidelines" }} />
+              <Stack.Screen name="blogs" options={{ title: "Blogs" }} />
+              <Stack.Screen name="blog/[id]" options={{ title: "Blog" }} />
             </Stack>
           </AuthGate>
         </AuthProvider>

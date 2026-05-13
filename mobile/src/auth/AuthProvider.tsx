@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import { fetchMe, login as loginApi, logout as logoutApi, register as registerApi, RegisterPayload } from "@/api/auth";
 import { setOnUnauthenticated } from "@/api/client";
 import { tokenStorage } from "@/api/storage";
+import { registerForPushAsync, unregisterDevice } from "@/push";
 import type { AuthUser } from "@/api/types";
 
 type AuthState =
@@ -42,6 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshMe]);
 
+  // Whenever we transition to authed, register this device for push.
+  // Fire-and-forget — failures are logged but don't block the user.
+  useEffect(() => {
+    if (state.status === "authed") {
+      void registerForPushAsync();
+    }
+  }, [state.status]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       ...state,
@@ -54,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setState({ status: "authed", user });
       },
       logout: async () => {
+        await unregisterDevice();
         await logoutApi();
         setState({ status: "anon" });
       },

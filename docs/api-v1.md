@@ -70,6 +70,11 @@ Codes (see `src/lib/api/v1/errors.ts`):
 |---|---|
 | `GET /api/v1/rides?status=upcoming&cursor=…&limit=20` | Cursor-paginated list. `limit` capped at 50. |
 | `GET /api/v1/rides/:id` | Full ride detail incl. confirmed riders, participations, your registration. |
+| `POST /api/v1/rides/:id/register` | Register the current user. Tier-gated, capacity-checked, transactional. |
+| `GET /api/v1/rides/:id/live[?since=ISO]` | Live session state + latest position per rider + lead/own polyline. `since` for delta polling. |
+| `POST /api/v1/rides/:id/live/join` | Join the live session. Returns `isLead` / `isSweep`. |
+| `POST /api/v1/rides/:id/live/break` | `{ action: "start" \| "end", reason? }` — admin only. Exclusive break, pauses session. |
+| `GET /api/v1/rides/:id/live/metrics` | Group + personal metrics (distance, moving time, speeds). |
 | `POST /api/v1/rides/:id/live/location` | Batch breadcrumb upload (see below). |
 
 ### Batch live-location upload
@@ -116,6 +121,33 @@ Response:
 | Endpoint | Description |
 |---|---|
 | `GET /api/v1/notifications` | Top 50 notifications (per-user + global). |
+
+## Riders / Garage / Achievements / Guidelines / Blogs
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/riders?period=6m\|1y\|all&search=name` | Leaderboard. PII included only for admins. |
+| `GET /api/v1/motorcycles` | Current user's garage. |
+| `POST /api/v1/motorcycles` | Add a motorcycle. |
+| `PATCH /api/v1/motorcycles/:id` | Update. Scoped to owner. |
+| `DELETE /api/v1/motorcycles/:id` | Remove. |
+| `GET /api/v1/badges` | Badge catalogue. |
+| `GET /api/v1/achievements` | Current user's earned badges. |
+| `GET /api/v1/guidelines` | Riding guidelines (cacheable). |
+| `GET /api/v1/blogs?cursor=…&limit=20` | Approved blog posts, cursor-paginated. |
+| `GET /api/v1/blogs/:id` | Blog detail. |
+
+## Site settings (UPI)
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/site-settings/:key` | Public keys: `upi_config`, `reg_form_settings`, `arena_weights`, `achievement_settings`, `role_permissions`. Other keys require admin. |
+
+## Upload
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/v1/upload` | Multipart image upload. Fields: `file` (or `dataUrl`), `type` (`avatar` \| `payment-proof` \| `ride-poster` \| `blog-cover` \| `ride-post` \| `motorcycle` \| `misc`), `targetId?`. Returns `{ url }`. |
 
 ## Health
 

@@ -1,0 +1,103 @@
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+import { apiFetch } from "@/api/client";
+import { deviceStorage } from "@/api/storage";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+/**
+ * Ask for push permission, obtain an Expo push token, and register it with
+ * the backend so server-side dispatch can find this device.
+ *
+ * Returns the Expo push token, or null if the user declined / we're on a
+ * simulator that can't receive pushes.
+ */
+export async function registerForPushAsync(): Promise<string | null> {
+  if (!Device.isDevice) {
+    // Push doesn't work on iOS simulator / Android emulator with most setups.
+    return null;
+  }
+
+  const settings = await Notifications.getPermissionsAsync();
+  let status = settings.status;
+  if (status !== "granted") {
+    const requested = await Notifications.requestPermissionsAsync();
+    status = requested.status;
+  }
+  if (status !== "granted") {
+    return null;
+  }
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#ff4757",
+    });
+  }
+
+  const projectId =
+    (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
+    Constants.easConfig?.projectId;
+  if (!projectId) {
+    console.warn("[T2W][push] No EAS projectId in app config; skipping token request.");
+    return null;
+  }
+
+  let pushToken: string;
+  try {
+    const t = await Notifications.getExpoPushTokenAsync({ projectId });
+    pushToken = t.data;
+  } catch (err) {
+    console.warn("[T2W][push] Failed to obtain push token:", err);
+    return null;
+  }
+
+  const deviceId = await deviceStorage.getDeviceId();
+  if (!deviceId) {
+    // AuthProvider always sets this on first login; if it's missing here we
+    // haven't logged in yet — skip silently, this will be retried on next
+    // app launch once we have a session.
+    return pushToken;
+  }
+
+  try {
+    await apiFetch<{ id: string }>("/api/v1/devices", {
+      method: "POST",
+      body: {
+        token: pushToken,
+        platform: Platform.OS === "ios" ? "ios" : "android",
+        deviceId,
+        appBuild: Constants.expoConfig?.version ?? null,
+      },
+    });
+  } catch (err) {
+    console.warn("[T2W][push] Failed to register device with backend:", err);
+  }
+
+  return pushToken;
+}
+
+export async function unregisterDevice(): Promise<void> {
+  const deviceId = await deviceStorage.getDeviceId();
+  if (!deviceId) return;
+  try {
+    await apiFetch<{ success: true }>(`/api/v1/devices`, {
+      method: "DELETE",
+      query: { deviceId },
+    });
+  } catch {
+    // Best-effort.
+  }
+}

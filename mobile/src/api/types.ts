@@ -33,7 +33,7 @@ export type RideStatus = "upcoming" | "ongoing" | "completed" | "cancelled";
 export type RideListItem = {
   id: string;
   title: string;
-  rideNumber: number;
+  rideNumber: string;
   type: string;
   status: RideStatus;
   startDate: string;

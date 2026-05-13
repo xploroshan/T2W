@@ -9,9 +9,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { useLocalSearchParams, Stack, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
+import { Button } from "@/components/Button";
 import { getRide } from "@/api/rides";
 import { colors, radius, spacing, text } from "@/theme";
 
@@ -113,14 +114,22 @@ export default function RideDetailScreen() {
                 </Text>
               ) : null}
             </View>
-          ) : (
-            <View style={[styles.regBox, styles.section]}>
-              <Text style={text.bodySecondary}>
-                Registration via the mobile app is coming in the next update.
-                Open the website to register for now.
-              </Text>
-            </View>
-          )}
+          ) : ride.status === "upcoming" ? (
+            <Button
+              label="Register for this ride"
+              onPress={() => router.push(`/ride/${ride.id}/register`)}
+              style={{ marginTop: spacing.lg }}
+            />
+          ) : null}
+
+          {ride.status === "ongoing" || ride.status === "upcoming" ? (
+            <Button
+              label="Open live ride"
+              variant="secondary"
+              onPress={() => router.push(`/ride/${ride.id}/live`)}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </Screen>
