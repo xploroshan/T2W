@@ -138,7 +138,7 @@ Push triggers wired so far:
 
 Payloads carry a `data` field with a `kind` discriminator (`ride` | `blog` | `account_approved`) so the mobile tap handler can deep-link.
 
-## Riders / Garage / Achievements / Guidelines / Blogs
+## Riders / Garage / Achievements / Guidelines / Blogs / Ride posts / Contact
 
 | Endpoint | Description |
 |---|---|
@@ -152,6 +152,26 @@ Payloads carry a `data` field with a `kind` discriminator (`ride` | `blog` | `ac
 | `GET /api/v1/guidelines` | Riding guidelines (cacheable). |
 | `GET /api/v1/blogs?cursor=…&limit=20` | Approved blog posts, cursor-paginated. |
 | `GET /api/v1/blogs/:id` | Blog detail. |
+| `POST /api/v1/blogs` | Create a blog (admins auto-approved; t2w_rider pending). |
+| `GET /api/v1/ride-posts?rideId=…&status=approved` | Ride photo posts. Admins can pass `status=pending` for moderation; everyone else sees approved only. |
+| `POST /api/v1/ride-posts` | Create a ride post (admins auto-approved; t2w_rider pending). |
+| `PATCH /api/v1/ride-posts/:id` | Admin moderation. |
+| `DELETE /api/v1/ride-posts/:id` | Owner or admin can remove. |
+| `POST /api/v1/contact` | Authenticated contact-form message. Rate-limited to 3/hour/IP. |
+
+## Admin (`/api/v1/admin/*`)
+
+All admin endpoints require `superadmin` or `core_member`. Role-change is additionally guarded by `canManageRoles`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/v1/admin/users?status=pending\|active&search=…&cursor=…` | Paginated user list. |
+| `POST /api/v1/admin/users/:id/approve` | Approve a pending user (pushes welcome notification). |
+| `POST /api/v1/admin/users/:id/reject` | Delete a pending user. |
+| `PATCH /api/v1/admin/users/:id/role` | Body `{ newRole }`. Super admins can set any role; core members are limited to `rider` / `t2w_rider`. |
+| `GET /api/v1/admin/rides/:id/registrations?status=…` | Full PII registration list for moderation. |
+| `PATCH /api/v1/admin/registrations/:regId` | Body `{ approvalStatus, accommodationType? }`. Race-safe capacity guard on approve. Pushes the rider. |
+| `GET /api/v1/admin/activity-log?cursor=…` | Audit trail. `hasRollback` indicates whether the entry has a rollback payload (rollback action is web-only for now). |
 
 ## Site settings (UPI)
 

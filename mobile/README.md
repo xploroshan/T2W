@@ -137,12 +137,41 @@ captures it with `react-native-view-shot`, and opens the native share
 sheet via `expo-sharing`. The same screen lets the rider pick a
 background photo and up to 4 stats from the live-metrics endpoint.
 
+## Admin (core_member / superadmin)
+
+A dedicated bottom-tab appears for admins only (hidden from regular riders
+via `href: null`). From there:
+
+- **User approvals** — paginated pending / active list with one-tap
+  approve / reject, plus role changes (super admins get all roles; core
+  members limited to rider / t2w_rider per backend guard).
+- **Ride registrations** — pick an upcoming or ongoing ride, then approve
+  / reject / mark-as-dropped with the rider's UPI screenshot inline.
+- **Activity log** — read-only audit feed with cursor pagination.
+
+Heavier admin surfaces (ride CRUD, site settings, scheduled emails,
+activity-log rollback) remain on the web for now.
+
+## Ride posts, blog create, contact
+
+- Ride detail has a "Ride posts & photos" CTA → `/ride/:id/posts`. T2W
+  riders and admins can compose with up to 5 photos via the image picker;
+  admins auto-approve, t2w_riders enter the moderation queue.
+- Blogs tab shows a "+" in the header for users with post permission →
+  `/blog/new` form (cover image, tags, vlog URL, markdown content).
+- Profile → "Contact crew" → authenticated contact-form. Rate-limited at
+  3/hour/IP on the backend.
+
 ## What's not done yet
 
-- Ride post-ride summary (smoothed distance, splits, elevation) — currently
-  uses the lighter `/api/v1/rides/:id/live/metrics` shape.
-- Ride posts (community photo posts).
-- Admin moderation surfaces.
+- Ride CRUD on mobile (create / edit / delete rides — admins still use the
+  web for this; the dedicated `/admin/rides` surface is deferred).
+- Site settings editor on mobile (form-config / UPI / email templates —
+  read-only via `site-settings/:key` for now).
+- Activity-log rollback action (web-only because the rollback payload
+  schema varies per action).
+- Post-ride summary (smoothed distance, splits, elevation) — `live/metrics`
+  is what mobile uses; the analytics-heavy summary stays on the web.
 - E2E with Maestro.
 
 ## A note on Expo dependency versions

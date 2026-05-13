@@ -2,11 +2,18 @@ import React from "react";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
+import { Plus } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { listBlogs } from "@/api/misc";
+import { useAuth } from "@/auth/AuthProvider";
 import { colors, radius, spacing, text } from "@/theme";
 
 export default function BlogsScreen() {
+  const auth = useAuth();
+  const canPost =
+    auth.status === "authed" &&
+    ["superadmin", "core_member", "t2w_rider"].includes(auth.user.role);
+
   const q = useInfiniteQuery({
     queryKey: ["blogs"],
     queryFn: ({ pageParam }) => listBlogs(pageParam as string | undefined),
@@ -18,7 +25,17 @@ export default function BlogsScreen() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: "Blogs" }} />
+      <Stack.Screen
+        options={{
+          title: "Blogs",
+          headerRight: () =>
+            canPost ? (
+              <Pressable hitSlop={10} onPress={() => router.push("/blog/new")}>
+                <Plus color={colors.primary} size={22} />
+              </Pressable>
+            ) : null,
+        }}
+      />
       {q.isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />

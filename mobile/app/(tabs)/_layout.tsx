@@ -1,9 +1,15 @@
 import React from "react";
 import { Tabs } from "expo-router";
-import { Home, MapPin, Trophy, User } from "lucide-react-native";
+import { Home, MapPin, Shield, Trophy, User } from "lucide-react-native";
+import { useAuth } from "@/auth/AuthProvider";
 import { colors } from "@/theme";
 
 export default function TabsLayout() {
+  const auth = useAuth();
+  const isAdmin =
+    auth.status === "authed" &&
+    (auth.user.role === "superadmin" || auth.user.role === "core_member");
+
   return (
     <Tabs
       screenOptions={{
@@ -34,6 +40,16 @@ export default function TabsLayout() {
         options={{
           title: "Arena",
           tabBarIcon: ({ color, size }) => <Trophy color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Admin",
+          // Hide from the bar entirely for non-admins instead of showing a
+          // disabled tab — keeps the bar clean for regular riders.
+          href: isAdmin ? "/(tabs)/admin" : null,
+          tabBarIcon: ({ color, size }) => <Shield color={color} size={size} />,
         }}
       />
       <Tabs.Screen

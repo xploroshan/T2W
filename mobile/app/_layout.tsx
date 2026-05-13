@@ -64,10 +64,17 @@ export default function RootLayout() {
               <Stack.Screen name="ride/[id]/live" options={{ title: "Live ride" }} />
               <Stack.Screen name="ride/[id]/register" options={{ title: "Register" }} />
               <Stack.Screen name="ride/[id]/share" options={{ title: "Share" }} />
+              <Stack.Screen name="ride/[id]/posts" options={{ title: "Ride posts" }} />
               <Stack.Screen name="garage" options={{ title: "Garage" }} />
               <Stack.Screen name="guidelines" options={{ title: "Guidelines" }} />
               <Stack.Screen name="blogs" options={{ title: "Blogs" }} />
               <Stack.Screen name="blog/[id]" options={{ title: "Blog" }} />
+              <Stack.Screen name="blog/new" options={{ title: "New blog" }} />
+              <Stack.Screen name="contact" options={{ title: "Contact" }} />
+              <Stack.Screen name="admin/users" options={{ title: "Users" }} />
+              <Stack.Screen name="admin/registrations" options={{ title: "Registrations" }} />
+              <Stack.Screen name="admin/registrations/[rideId]" options={{ title: "Registrations" }} />
+              <Stack.Screen name="admin/activity-log" options={{ title: "Activity log" }} />
             </Stack>
           </AuthGate>
         </AuthProvider>

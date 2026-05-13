@@ -50,6 +50,7 @@ export default function ProfileScreen() {
           <LinkRow label="My garage" onPress={() => router.push("/garage")} />
           <LinkRow label="Riding guidelines" onPress={() => router.push("/guidelines")} />
           <LinkRow label="Blogs" onPress={() => router.push("/blogs")} />
+          <LinkRow label="Contact crew" onPress={() => router.push("/contact")} />
         </View>
 
         <Button label="Sign out" variant="secondary" onPress={() => auth.logout()} />

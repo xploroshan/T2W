@@ -139,6 +139,13 @@ export default function RideDetailScreen() {
               style={{ marginTop: spacing.md }}
             />
           ) : null}
+
+          <Button
+            label="Ride posts & photos"
+            variant="secondary"
+            onPress={() => router.push(`/ride/${ride.id}/posts`)}
+            style={{ marginTop: spacing.md }}
+          />
         </View>
       </ScrollView>
     </Screen>
